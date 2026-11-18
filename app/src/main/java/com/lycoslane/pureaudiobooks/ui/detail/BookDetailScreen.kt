@@ -663,11 +663,9 @@ fun BookDetailScreen(
     }
 
     if (showBookmarkDialog && book != null) {
-        val targetTrack = if (tracks.any { it.id == activeTrackId }) {
-            tracks.first { it.id == activeTrackId }
-        } else {
-            tracks.getOrNull(progress.currentTrackIndex)
-        }
+        val targetTrack = tracks.firstOrNull { it.id == activeTrackId }
+            ?: tracks.firstOrNull { it.id == book.lastTrackId }
+            ?: tracks.firstOrNull()
         val targetPos = if (tracks.any { it.id == activeTrackId }) playerState.positionMs else (targetTrack?.positionMs ?: 0L)
         AlertDialog(
             onDismissRequest = { showBookmarkDialog = false },

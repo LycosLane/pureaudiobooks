@@ -129,6 +129,7 @@ object LocalAudiobookScanner {
                     val folderKey = "local://${candidate.folderDocId}::$albumName"
                     discoveredKeys += folderKey
                     upsertAudiobook(
+                        context = context,
                         dao = dao,
                         folderKey = folderKey,
                         folderDocId = candidate.folderDocId,
@@ -148,6 +149,7 @@ object LocalAudiobookScanner {
                 val folderKey = "local://${candidate.folderDocId}"
                 discoveredKeys += folderKey
                 upsertAudiobook(
+                    context = context,
                     dao = dao,
                     folderKey = folderKey,
                     folderDocId = candidate.folderDocId,
