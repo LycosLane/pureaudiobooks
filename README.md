@@ -1,6 +1,6 @@
 # PureAudiobooks
 
-[![Platform: Android](https://img.shields.io/badge/Platform-Android%2010%2B-0078D6.svg)](https://github.com/LycosLane/PureAudiobooks)
+[![Platform: Android](https://img.shields.io/badge/Platform-Android%2010%2B-0078D6.svg)](https://github.com/LycosLane/pureaudiobooks)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Zero Telemetry](https://img.shields.io/badge/Telemetry-Zero-brightgreen.svg)]()
 [![No Ads](https://img.shields.io/badge/Ads-None-success.svg)]()
