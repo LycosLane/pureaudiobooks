@@ -26,11 +26,15 @@
     <string name="filter_in_progress">In progress</string>
     <string name="filter_finished">Finished</string>
     <string name="filter_conflicts">Tag conflicts</string>
+    <string name="filter_hidden">Hidden</string>
     <string name="filter_trash">Trash</string>
 
     <string name="tracks_count">%1$d tracks</string>
     <string name="remaining_suffix">left</string>
     <string name="open_book">Open audiobook</string>
+    <string name="reset_progress">Reset playback progress</string>
+    <string name="hide_book">Hide from library</string>
+    <string name="unhide_book">Show in library</string>
     <string name="move_to_trash">Move to trash</string>
     <string name="restore">Restore</string>
     <string name="delete_permanently">Delete permanently</string>

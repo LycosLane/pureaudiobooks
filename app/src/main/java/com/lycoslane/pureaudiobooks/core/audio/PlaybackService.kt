@@ -436,7 +436,7 @@ class PlaybackService : MediaSessionService() {
             player.prepare()
             player.play()
             withContext(Dispatchers.IO) {
-                dao.updateLastPlayed(pair.audiobook.id, System.currentTimeMillis())
+                dao.updateLastTrack(pair.audiobook.id, pair.track.id, System.currentTimeMillis())
             }
         }
     }

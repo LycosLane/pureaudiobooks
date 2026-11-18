@@ -126,6 +126,12 @@ interface PureAudiobooksDao {
     @Query("UPDATE audiobooks SET lastPlayedAtMs = :timestampMs WHERE id = :audiobookId")
     suspend fun updateLastPlayed(audiobookId: Long, timestampMs: Long)
 
+    @Query("UPDATE audiobooks SET lastTrackId = :trackId, lastPlayedAtMs = :timestampMs WHERE id = :audiobookId")
+    suspend fun updateLastTrack(audiobookId: Long, trackId: Long, timestampMs: Long)
+
+    @Query("UPDATE audiobooks SET isHidden = :hidden WHERE id = :audiobookId")
+    suspend fun setHidden(audiobookId: Long, hidden: Boolean)
+
     @Query("UPDATE audiobooks SET isFinished = :finished, finishedAtMs = :finishedAtMs WHERE id = :audiobookId")
     suspend fun setAudiobookFinished(audiobookId: Long, finished: Boolean, finishedAtMs: Long)
 

@@ -33,6 +33,8 @@ data class AudiobookEntity(
     val isSplitByAlbum: Boolean = false,
     val isFinished: Boolean = false,
     val finishedAtMs: Long = 0L,
+    val isHidden: Boolean = false,
+    val lastTrackId: Long = 0L,
     val deletedAtMs: Long? = null,
     val lastPlayedAtMs: Long = 0L,
     val lastScannedMs: Long = 0L

@@ -155,6 +155,7 @@ class PlayerController(
     fun playAudiobook(book: AudiobookEntity, tracks: List<ChapterTrackEntity>, specificTrack: ChapterTrackEntity? = null) {
         if (tracks.isEmpty()) return
         val targetTrack = specificTrack
+            ?: tracks.firstOrNull { it.id == book.lastTrackId && !it.isFinished }
             ?: tracks.firstOrNull { !it.isFinished && it.positionMs > 0L }
             ?: tracks.firstOrNull { !it.isFinished }
             ?: tracks.first()
@@ -223,7 +224,7 @@ class PlayerController(
         controller.play()
 
         scope.launch(Dispatchers.IO) {
-            dao.updateLastPlayed(book.id, System.currentTimeMillis())
+            dao.updateLastTrack(book.id, targetTrack.id, System.currentTimeMillis())
         }
     }
 

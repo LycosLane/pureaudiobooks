@@ -204,6 +204,19 @@ class AudiobookRepository(
             finished = finished,
             finishedAtMs = if (finished) System.currentTimeMillis() else 0L
         )
+        if (!finished) {
+            dao.updateLastTrack(audiobookId, 0L, 0L)
+        }
+    }
+
+    suspend fun resetBookProgress(audiobookId: Long) = withContext(Dispatchers.IO) {
+        dao.resetAllTracksForBook(audiobookId, finished = false, positionMs = 0L)
+        dao.setAudiobookFinished(audiobookId, finished = false, finishedAtMs = 0L)
+        dao.updateLastTrack(audiobookId, 0L, 0L)
+    }
+
+    suspend fun setBookHidden(audiobookId: Long, hidden: Boolean) = withContext(Dispatchers.IO) {
+        dao.setHidden(audiobookId, hidden)
     }
 
     suspend fun addBookmark(

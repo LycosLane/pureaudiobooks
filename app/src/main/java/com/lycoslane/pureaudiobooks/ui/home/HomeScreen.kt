@@ -64,11 +64,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lycoslane.pureaudiobooks.R
 import com.lycoslane.pureaudiobooks.core.database.AudiobookWithTracks
+import com.lycoslane.pureaudiobooks.core.database.ChapterTrackEntity
 import com.lycoslane.pureaudiobooks.ui.common.BookCoverImage
 import com.lycoslane.pureaudiobooks.ui.common.Formatters
 
 private enum class LibraryFilter {
-    ALL, IN_PROGRESS, FINISHED, CONFLICTS, TRASH
+    ALL, IN_PROGRESS, FINISHED, HIDDEN, CONFLICTS, TRASH
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -86,6 +87,9 @@ fun HomeScreen(
     onPickFolder: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenBook: (Long) -> Unit,
+    onMarkFinished: (Long, Boolean) -> Unit,
+    onResetProgress: (Long) -> Unit,
+    onSetHidden: (Long, Boolean) -> Unit,
     onMoveToTrash: (Long) -> Unit,
     onRestoreFromTrash: (Long) -> Unit,
     onPermanentlyDelete: (Long) -> Unit
@@ -95,16 +99,25 @@ fun HomeScreen(
     var bookMenuTarget by remember { mutableStateOf<AudiobookWithTracks?>(null) }
     var confirmPermDelete by remember { mutableStateOf<AudiobookWithTracks?>(null) }
 
-    val conflictCount = remember(activeBooks) { activeBooks.count { it.audiobook.hasTagConflict } }
+    val conflictCount = remember(activeBooks) {
+        activeBooks.count { !it.audiobook.isHidden && it.audiobook.hasTagConflict }
+    }
+    val hiddenCount = remember(activeBooks) {
+        activeBooks.count { it.audiobook.isHidden }
+    }
 
     val displayedBooks = remember(activeBooks, trashedBooks, selectedFilter, searchQuery) {
         val base = when (selectedFilter) {
-            LibraryFilter.ALL -> activeBooks
+            // Main view hides finished and manually hidden audiobooks to stay uncluttered
+            LibraryFilter.ALL -> activeBooks.filter { !it.audiobook.isFinished && !it.audiobook.isHidden }
             LibraryFilter.IN_PROGRESS -> activeBooks.filter { item ->
-                !item.audiobook.isFinished && item.tracks.any { it.positionMs > 0L || it.isFinished }
+                !it.audiobook.isFinished && !it.audiobook.isHidden && (
+                    item.audiobook.lastTrackId > 0L || item.tracks.any { t -> t.positionMs > 0L || t.isFinished }
+                )
             }
-            LibraryFilter.FINISHED -> activeBooks.filter { it.audiobook.isFinished }
-            LibraryFilter.CONFLICTS -> activeBooks.filter { it.audiobook.hasTagConflict }
+            LibraryFilter.FINISHED -> activeBooks.filter { it.audiobook.isFinished && !it.audiobook.isHidden }
+            LibraryFilter.HIDDEN -> activeBooks.filter { it.audiobook.isHidden }
+            LibraryFilter.CONFLICTS -> activeBooks.filter { !it.audiobook.isHidden && it.audiobook.hasTagConflict }
             LibraryFilter.TRASH -> trashedBooks
         }
         val q = searchQuery.trim()
@@ -216,6 +229,13 @@ fun HomeScreen(
                     onClick = { selectedFilter = LibraryFilter.FINISHED },
                     label = { Text(stringResource(R.string.filter_finished)) }
                 )
+                if (hiddenCount > 0 || selectedFilter == LibraryFilter.HIDDEN) {
+                    FilterChip(
+                        selected = selectedFilter == LibraryFilter.HIDDEN,
+                        onClick = { selectedFilter = LibraryFilter.HIDDEN },
+                        label = { Text(stringResource(R.string.filter_hidden)) }
+                    )
+                }
                 if (conflictCount > 0 || selectedFilter == LibraryFilter.CONFLICTS) {
                     FilterChip(
                         selected = selectedFilter == LibraryFilter.CONFLICTS,
@@ -308,10 +328,18 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(displayedBooks, key = { it.audiobook.id }) { item ->
+                        val sortedTracks = remember(item.tracks) {
+                            item.tracks.sortedWith(
+                                compareBy<ChapterTrackEntity> { it.sortOrder }
+                                    .thenBy { it.trackNumber }
+                                    .thenBy { it.title }
+                            )
+                        }
                         val summary = Formatters.calculateBookProgress(
-                            item.tracks,
-                            activeTrackId,
-                            activePositionMs
+                            tracks = sortedTracks,
+                            activeTrackId = activeTrackId,
+                            activePositionMs = activePositionMs,
+                            fallbackTrackId = item.audiobook.lastTrackId
                         )
                         Card(
                             modifier = Modifier
@@ -374,10 +402,18 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     items(displayedBooks, key = { it.audiobook.id }) { item ->
+                        val sortedTracks = remember(item.tracks) {
+                            item.tracks.sortedWith(
+                                compareBy<ChapterTrackEntity> { it.sortOrder }
+                                    .thenBy { it.trackNumber }
+                                    .thenBy { it.title }
+                            )
+                        }
                         val summary = Formatters.calculateBookProgress(
-                            item.tracks,
-                            activeTrackId,
-                            activePositionMs
+                            tracks = sortedTracks,
+                            activeTrackId = activeTrackId,
+                            activePositionMs = activePositionMs,
+                            fallbackTrackId = item.audiobook.lastTrackId
                         )
                         Card(
                             colors = CardDefaults.cardColors(),
@@ -446,25 +482,68 @@ fun HomeScreen(
     }
 
     bookMenuTarget?.let { target ->
+        val book = target.audiobook
         AlertDialog(
             onDismissRequest = { bookMenuTarget = null },
-            title = { Text(target.audiobook.title) },
+            title = { Text(book.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
             text = {
                 Column {
                     TextButton(
                         onClick = {
                             bookMenuTarget = null
-                            onOpenBook(target.audiobook.id)
+                            onOpenBook(book.id)
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(stringResource(R.string.open_book)) }
+
                     TextButton(
                         onClick = {
                             bookMenuTarget = null
-                            onMoveToTrash(target.audiobook.id)
+                            onMarkFinished(book.id, !book.isFinished)
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(stringResource(R.string.move_to_trash)) }
+                    ) {
+                        Text(
+                            stringResource(
+                                if (book.isFinished) R.string.mark_unfinished else R.string.mark_finished
+                            )
+                        )
+                    }
+
+                    TextButton(
+                        onClick = {
+                            bookMenuTarget = null
+                            onResetProgress(book.id)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(stringResource(R.string.reset_progress)) }
+
+                    TextButton(
+                        onClick = {
+                            bookMenuTarget = null
+                            onSetHidden(book.id, !book.isHidden)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            stringResource(
+                                if (book.isHidden) R.string.unhide_book else R.string.hide_book
+                            )
+                        )
+                    }
+
+                    TextButton(
+                        onClick = {
+                            bookMenuTarget = null
+                            onMoveToTrash(book.id)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            stringResource(R.string.move_to_trash),
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             },
             confirmButton = {

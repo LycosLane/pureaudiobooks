@@ -8,7 +8,8 @@ data class BookProgressSummary(
     val remainingMs: Long,
     val fraction: Float,
     val finishedTracks: Int,
-    val totalTracks: Int
+    val totalTracks: Int,
+    val currentTrackIndex: Int
 )
 
 object Formatters {
@@ -39,20 +40,35 @@ object Formatters {
     fun calculateBookProgress(
         tracks: List<ChapterTrackEntity>,
         activeTrackId: Long? = null,
-        activePositionMs: Long = 0L
+        activePositionMs: Long = 0L,
+        fallbackTrackId: Long = 0L
     ): BookProgressSummary {
         if (tracks.isEmpty()) {
-            return BookProgressSummary(0L, 0L, 0L, 0f, 0, 0)
+            return BookProgressSummary(0L, 0L, 0L, 0f, 0, 0, 0)
         }
+        val effectiveTrackId = when {
+            activeTrackId != null && tracks.any { it.id == activeTrackId } -> activeTrackId
+            fallbackTrackId > 0L && tracks.any { it.id == fallbackTrackId } -> fallbackTrackId
+            else -> null
+        }
+        val currentIdx = if (effectiveTrackId != null) {
+            tracks.indexOfFirst { it.id == effectiveTrackId }
+        } else {
+            tracks.indexOfFirst { !it.isFinished && it.positionMs > 0L }
+                .takeIf { it >= 0 }
+                ?: tracks.indexOfFirst { !it.isFinished }.coerceAtLeast(0)
+        }
+
         var total = 0L
         var listened = 0L
         var finishedCount = 0
 
-        for (track in tracks) {
+        tracks.forEachIndexed { idx, track ->
             val dur = track.durationMs.coerceAtLeast(0L)
             total += dur
+            val isBeforeCurrent = effectiveTrackId != null && idx < currentIdx
             when {
-                track.isFinished -> {
+                track.isFinished || isBeforeCurrent -> {
                     listened += dur
                     finishedCount++
                 }
@@ -73,7 +89,8 @@ object Formatters {
             remainingMs = remaining,
             fraction = fraction,
             finishedTracks = finishedCount,
-            totalTracks = tracks.size
+            totalTracks = tracks.size,
+            currentTrackIndex = currentIdx.coerceAtLeast(0)
         )
     }
 }

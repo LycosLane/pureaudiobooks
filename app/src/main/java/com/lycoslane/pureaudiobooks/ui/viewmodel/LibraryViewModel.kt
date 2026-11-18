@@ -62,6 +62,27 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun setBookHidden(bookId: Long, hidden: Boolean) {
+        viewModelScope.launch {
+            if (hidden) app.playerController.stopIfPlayingBook(bookId)
+            repo.setBookHidden(bookId, hidden)
+        }
+    }
+
+    fun markBookFinished(bookId: Long, finished: Boolean) {
+        viewModelScope.launch {
+            if (finished) app.playerController.stopIfPlayingBook(bookId)
+            repo.markBookFinished(bookId, finished)
+        }
+    }
+
+    fun resetBookProgress(bookId: Long) {
+        viewModelScope.launch {
+            app.playerController.stopIfPlayingBook(bookId)
+            repo.resetBookProgress(bookId)
+        }
+    }
+
     fun restoreFromTrash(bookId: Long) {
         viewModelScope.launch { repo.restoreFromTrash(bookId) }
     }

@@ -165,6 +165,9 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     onOpenBook = { bookId ->
                         navController.navigate("detail/$bookId") { launchSingleTop = true }
                     },
+                    onMarkFinished = { bookId, finished -> libraryViewModel.markBookFinished(bookId, finished) },
+                    onResetProgress = { bookId -> libraryViewModel.resetBookProgress(bookId) },
+                    onSetHidden = { bookId, hidden -> libraryViewModel.setBookHidden(bookId, hidden) },
                     onMoveToTrash = { bookId -> libraryViewModel.moveToTrash(bookId) },
                     onRestoreFromTrash = { bookId -> libraryViewModel.restoreFromTrash(bookId) },
                     onPermanentlyDelete = { bookId -> libraryViewModel.permanentlyDelete(bookId) }
@@ -204,6 +207,11 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     onTogglePlayPause = { app.playerController.togglePlayPause() },
                     onToggleTrackFinished = { tid, finished -> detailViewModel.setTrackFinished(tid, finished) },
                     onMarkBookFinished = { finished -> detailViewModel.markBookFinished(finished) },
+                    onResetProgress = { detailViewModel.resetBookProgress() },
+                    onSetHidden = { hidden ->
+                        detailViewModel.setBookHidden(hidden)
+                        if (hidden) navController.popBackStack()
+                    },
                     onMoveToTrash = {
                         libraryViewModel.moveToTrash(bookId)
                         navController.popBackStack()

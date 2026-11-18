@@ -26,11 +26,15 @@
     <string name="filter_in_progress">Begonnen</string>
     <string name="filter_finished">Fertig</string>
     <string name="filter_conflicts">Tag-Konflikte</string>
+    <string name="filter_hidden">Ausgeblendet</string>
     <string name="filter_trash">Papierkorb</string>
 
     <string name="tracks_count">%1$d Kapitel</string>
     <string name="remaining_suffix">übrig</string>
     <string name="open_book">Hörbuch öffnen</string>
+    <string name="reset_progress">Fortschritt zurücksetzen</string>
+    <string name="hide_book">Aus Bibliothek ausblenden</string>
+    <string name="unhide_book">In Bibliothek einblenden</string>
     <string name="move_to_trash">In Papierkorb</string>
     <string name="restore">Wiederherstellen</string>
     <string name="delete_permanently">Endgültig löschen</string>

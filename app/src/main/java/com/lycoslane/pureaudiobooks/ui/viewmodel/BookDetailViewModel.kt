@@ -53,6 +53,20 @@ class BookDetailViewModel(
         viewModelScope.launch { repo.markBookFinished(audiobookId, finished) }
     }
 
+    fun resetBookProgress() {
+        viewModelScope.launch {
+            app.playerController.stopIfPlayingBook(audiobookId)
+            repo.resetBookProgress(audiobookId)
+        }
+    }
+
+    fun setBookHidden(hidden: Boolean) {
+        viewModelScope.launch {
+            if (hidden) app.playerController.stopIfPlayingBook(audiobookId)
+            repo.setBookHidden(audiobookId, hidden)
+        }
+    }
+
     fun setPlaybackSpeed(speed: Float) {
         viewModelScope.launch {
             repo.updateBookSpeed(audiobookId, speed)
