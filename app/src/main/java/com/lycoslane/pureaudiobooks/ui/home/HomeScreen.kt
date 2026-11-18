@@ -111,7 +111,7 @@ fun HomeScreen(
             // Main view hides finished and manually hidden audiobooks to stay uncluttered
             LibraryFilter.ALL -> activeBooks.filter { !it.audiobook.isFinished && !it.audiobook.isHidden }
             LibraryFilter.IN_PROGRESS -> activeBooks.filter { item ->
-                !it.audiobook.isFinished && !it.audiobook.isHidden && (
+                !item.audiobook.isFinished && !item.audiobook.isHidden && (
                     item.audiobook.lastTrackId > 0L || item.tracks.any { t -> t.positionMs > 0L || t.isFinished }
                 )
             }
