@@ -37,5 +37,6 @@ data class AudiobookEntity(
     val lastTrackId: Long = 0L,
     val deletedAtMs: Long? = null,
     val lastPlayedAtMs: Long = 0L,
-    val lastScannedMs: Long = 0L
+    val lastScannedMs: Long = 0L,
+    val contentFingerprint: String = ""
 )

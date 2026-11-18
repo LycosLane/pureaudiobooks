@@ -113,6 +113,9 @@
     <string name="backup_imported">%1$d Hörbücher wiederhergestellt</string>
     <string name="backup_import_failed">Backup konnte nicht importiert werden</string>
 
+    <string name="snackbar_book_hidden">Hörbuch ausgeblendet</string>
+    <string name="action_undo">Rückgängig</string>
+    <string name="player_silence">Stille</string>
     <string name="save">Speichern</string>
     <string name="cancel">Abbrechen</string>
     <string name="close">Schließen</string>

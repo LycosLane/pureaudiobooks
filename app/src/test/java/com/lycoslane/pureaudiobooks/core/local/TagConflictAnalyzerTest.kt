@@ -25,29 +25,30 @@ class TagConflictAnalyzerTest {
     }
 
     @Test
-    fun missingTagsFlagsConflictAndUsesFolderAndParent() {
+    fun missingTagsDoesNotAlarmOnImportAndUsesFolderAndParent() {
         val res = TagConflictAnalyzer.analyze(
             folderName = "The Hobbit",
             parentFolderName = "J.R.R. Tolkien",
             albumTags = listOf("", ""),
             artistTags = emptyList()
         )
-        assertTrue(res.hasConflict)
+        assertFalse(res.hasConflict)
         assertTrue(res.summary.hasMissingTags)
         assertEquals("The Hobbit", res.suggestedTitle)
         assertEquals("J.R.R. Tolkien", res.suggestedAuthor)
     }
 
     @Test
-    fun multipleAlbumsInFolderFlagsConflictAndSortsCandidates() {
+    fun multipleAlbumsInFolderKeepsCandidatesWithoutConflictBanner() {
         val res = TagConflictAnalyzer.analyze(
             folderName = "SciFi Collection",
             parentFolderName = "",
             albumTags = listOf("Book A", "Book B", "Book B", "Book B"),
             artistTags = listOf("Author 1", "Author 2")
         )
-        assertTrue(res.hasConflict)
+        assertFalse(res.hasConflict)
         assertTrue(res.summary.hasMultipleAlbums)
+        assertEquals("SciFi Collection", res.suggestedTitle)
         assertEquals(2, res.summary.albumCandidates.size)
         assertEquals("Book B", res.summary.albumCandidates[0].name)
         assertEquals(3, res.summary.albumCandidates[0].trackCount)
@@ -70,5 +71,27 @@ class TagConflictAnalyzerTest {
         assertFalse(res.hasConflict)
         assertEquals("Clean Title", res.suggestedTitle)
         assertEquals("Clean Author", res.suggestedAuthor)
+    }
+
+    @Test
+    fun contentFingerprintIsStableAcrossFolderRenames() {
+        val fp1 = LocalAudiobookScanner.computeContentFingerprint(
+            trackCount = 2,
+            sizesAndDurations = listOf(10_240L to 60_000L, 20_480L to 120_000L),
+            firstFileHeaderHash = "abc123"
+        )
+        val fp2 = LocalAudiobookScanner.computeContentFingerprint(
+            trackCount = 2,
+            sizesAndDurations = listOf(10_240L to 60_000L, 20_480L to 120_000L),
+            firstFileHeaderHash = "abc123"
+        )
+        val fpDifferent = LocalAudiobookScanner.computeContentFingerprint(
+            trackCount = 2,
+            sizesAndDurations = listOf(10_240L to 60_000L, 20_481L to 120_000L),
+            firstFileHeaderHash = "abc123"
+        )
+        assertTrue(fp1.isNotBlank())
+        assertEquals(fp1, fp2)
+        assertFalse(fp1 == fpDifferent)
     }
 }

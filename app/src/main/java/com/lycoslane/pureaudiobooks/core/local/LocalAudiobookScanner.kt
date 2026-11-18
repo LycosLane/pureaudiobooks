@@ -248,7 +248,43 @@ object LocalAudiobookScanner {
         }
     }
 
+    fun computeContentFingerprint(
+        trackCount: Int,
+        sizesAndDurations: List<Pair<Long, Long>>,
+        firstFileHeaderHash: String = ""
+    ): String {
+        if (trackCount <= 0 || sizesAndDurations.isEmpty()) return ""
+        val sb = StringBuilder()
+        sb.append("v1|").append(trackCount).append('|')
+        sizesAndDurations.forEach { (size, dur) ->
+            sb.append(size).append(':').append(dur).append(';')
+        }
+        if (firstFileHeaderHash.isNotBlank()) {
+            sb.append('|').append(firstFileHeaderHash)
+        }
+        return sha256(sb.toString())
+    }
+
+    private fun readFirstFileHeaderHash(context: Context, uri: Uri): String {
+        return runCatching {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                val buf = ByteArray(16 * 1024)
+                var total = 0
+                while (total < buf.size) {
+                    val n = input.read(buf, total, buf.size - total)
+                    if (n <= 0) break
+                    total += n
+                }
+                if (total <= 0) return@use ""
+                val digest = MessageDigest.getInstance("SHA-256")
+                digest.update(buf, 0, total)
+                digest.digest().joinToString("") { "%02x".format(it) }
+            }.orEmpty()
+        }.getOrDefault("")
+    }
+
     private suspend fun upsertAudiobook(
+        context: Context,
         dao: PureAudiobooksDao,
         folderKey: String,
         folderDocId: String,
@@ -274,7 +310,18 @@ object LocalAudiobookScanner {
             sidecar = sidecarInfo
         )
 
-        val existing = dao.getAudiobookByFolderKey(folderKey)
+        val sizesAndDurations = audioFiles.map { doc ->
+            doc.sizeBytes to (metaByDocId[doc.docId]?.durationMs ?: 0L)
+        }
+        val firstHeaderHash = audioFiles.firstOrNull()?.let { readFirstFileHeaderHash(context, it.uri) }.orEmpty()
+        val fingerprint = computeContentFingerprint(audioFiles.size, sizesAndDurations, firstHeaderHash)
+
+        val existingByKey = dao.getAudiobookByFolderKey(folderKey)
+        val matchedByFingerprint = if (existingByKey == null && !isSplitByAlbum && fingerprint.isNotBlank()) {
+            dao.getAudiobookByFingerprint(fingerprint)
+        } else null
+        val existing = existingByKey ?: matchedByFingerprint
+
         val audiobookId = if (existing == null) {
             dao.insertAudiobook(
                 AudiobookEntity(
@@ -291,10 +338,22 @@ object LocalAudiobookScanner {
                     conflictSummaryJson = analysis.summary.toJson(),
                     metadataLockedByUser = sidecarInfo != null && sidecarInfo.title.isNotBlank(),
                     isSplitByAlbum = isSplitByAlbum,
-                    lastScannedMs = now
+                    lastScannedMs = now,
+                    contentFingerprint = fingerprint
                 )
             )
         } else {
+            if (matchedByFingerprint != null || existing.contentFingerprint != fingerprint) {
+                dao.updateAudiobookFolderLocation(
+                    audiobookId = existing.id,
+                    folderKey = folderKey,
+                    folderDocId = folderDocId,
+                    folderUri = folderUri,
+                    folderName = folderName,
+                    parentFolderName = parentFolderName,
+                    contentFingerprint = fingerprint
+                )
+            }
             val keepUserMeta = existing.metadataLockedByUser && (sidecarInfo == null || sidecarInfo.isEmpty)
             val nextTitle = when {
                 forcedTitle != null -> forcedTitle
@@ -335,20 +394,41 @@ object LocalAudiobookScanner {
 
         if (audiobookId <= 0L) return
 
-        val existingByGuid = dao.getTracksForAudiobook(audiobookId).associateBy { it.guid }
-        val activeGuids = HashSet<String>(audioFiles.size)
+        val existingTracks = dao.getTracksForAudiobook(audiobookId)
+        val existingByGuid = existingTracks.associateBy { it.guid }
+        val existingByOrder = existingTracks.associateBy { it.sortOrder }
+        val claimedTrackIds = HashSet<Long>()
         val toInsert = mutableListOf<ChapterTrackEntity>()
 
         audioFiles.forEachIndexed { index, doc ->
             val guid = doc.docId
-            activeGuids += guid
             val meta = metaByDocId[doc.docId]
             val cleanFileTitle = doc.name.substringBeforeLast('.')
             val trackTitle = meta?.title?.takeIf { it.isNotBlank() } ?: cleanFileTitle
             val existingTrack = existingByGuid[guid]
+                ?: existingTracks.firstOrNull {
+                    it.id !in claimedTrackIds &&
+                        it.fileSizeBytes == doc.sizeBytes &&
+                        (meta?.durationMs == 0L || it.durationMs == meta?.durationMs)
+                }
+                ?: existingByOrder[index]?.takeIf { it.id !in claimedTrackIds && matchedByFingerprint != null }
+
             if (existingTrack != null) {
+                claimedTrackIds += existingTrack.id
                 val uriStr = doc.uri.toString()
-                if (existingTrack.fileUri != uriStr || existingTrack.sortOrder != index) {
+                if (existingTrack.guid != guid) {
+                    dao.updateTrackIdentity(
+                        trackId = existingTrack.id,
+                        guid = guid,
+                        fileUri = uriStr,
+                        sortOrder = index,
+                        trackNumber = meta?.trackNumber ?: existingTrack.trackNumber,
+                        title = trackTitle,
+                        durationMs = meta?.durationMs?.takeIf { it > 0L } ?: existingTrack.durationMs,
+                        albumTag = meta?.album.orEmpty(),
+                        artistTag = meta?.artist.orEmpty()
+                    )
+                } else if (existingTrack.fileUri != uriStr || existingTrack.sortOrder != index) {
                     dao.updateTrackDetails(
                         trackId = existingTrack.id,
                         fileUri = uriStr,
@@ -382,8 +462,8 @@ object LocalAudiobookScanner {
         if (toInsert.isNotEmpty()) {
             dao.insertTracks(toInsert)
         }
-        existingByGuid.values
-            .filter { it.guid !in activeGuids }
+        existingTracks
+            .filter { it.id !in claimedTrackIds }
             .forEach { dao.deleteTrack(it.id) }
     }
 

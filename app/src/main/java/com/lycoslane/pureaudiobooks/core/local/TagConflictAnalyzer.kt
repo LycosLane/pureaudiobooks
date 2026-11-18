@@ -136,10 +136,11 @@ object TagConflictAnalyzer {
             cleanFolder.isNotBlank() &&
             !primaryAlbum.equals(cleanFolder, ignoreCase = true)
 
-        val hasConflict = hasMultipleAlbums || hasMissingTags || folderVsTagMismatch
+        // Do not alarm the user with tag conflict warnings on import;
+        // keep candidates in ConflictSummary as a helpful quick-pick ("Schnellauswahl").
+        val hasConflict = false
 
         val suggestedTitle = when {
-            primaryAlbum.isNotBlank() && !hasMultipleAlbums && !folderVsTagMismatch -> primaryAlbum
             cleanFolder.isNotBlank() -> cleanFolder
             primaryAlbum.isNotBlank() -> primaryAlbum
             else -> "Unknown Audiobook"

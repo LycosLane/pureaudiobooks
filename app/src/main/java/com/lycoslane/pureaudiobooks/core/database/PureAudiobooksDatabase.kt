@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ChapterTrackEntity::class,
         BookmarkEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class PureAudiobooksDatabase : RoomDatabase() {
@@ -30,6 +30,12 @@ abstract class PureAudiobooksDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE audiobooks ADD COLUMN contentFingerprint TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun getInstance(context: Context): PureAudiobooksDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -37,7 +43,7 @@ abstract class PureAudiobooksDatabase : RoomDatabase() {
                     PureAudiobooksDatabase::class.java,
                     "pureaudiobooks.db"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
                     .also { INSTANCE = it }
             }

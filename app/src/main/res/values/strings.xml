@@ -113,6 +113,9 @@
     <string name="backup_imported">Restored %1$d audiobooks</string>
     <string name="backup_import_failed">Could not import backup</string>
 
+    <string name="snackbar_book_hidden">Audiobook hidden</string>
+    <string name="action_undo">Undo</string>
+    <string name="player_silence">Silence</string>
     <string name="save">Save</string>
     <string name="cancel">Cancel</string>
     <string name="close">Close</string>

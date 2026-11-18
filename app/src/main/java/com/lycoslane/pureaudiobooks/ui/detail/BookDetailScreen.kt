@@ -8,6 +8,8 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,29 +29,42 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.Bedtime
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Forward30
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.WarningAmber
-import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -67,19 +82,22 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.lycoslane.pureaudiobooks.R
+import com.lycoslane.pureaudiobooks.core.audio.PlayerState
 import com.lycoslane.pureaudiobooks.core.database.AudiobookWithTracks
 import com.lycoslane.pureaudiobooks.core.database.BookmarkEntity
 import com.lycoslane.pureaudiobooks.core.database.ChapterTrackEntity
 import com.lycoslane.pureaudiobooks.core.network.OnlineBookMatch
 import com.lycoslane.pureaudiobooks.ui.common.BookCoverImage
 import com.lycoslane.pureaudiobooks.ui.common.Formatters
+import java.util.Locale
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun BookDetailScreen(
     data: AudiobookWithTracks?,
@@ -87,12 +105,19 @@ fun BookDetailScreen(
     onlineLookupEnabled: Boolean,
     onlineResults: List<OnlineBookMatch>,
     isSearchingOnline: Boolean,
-    activeTrackId: Long?,
-    activePositionMs: Long,
-    isPlaying: Boolean,
+    playerState: PlayerState,
     onBack: () -> Unit,
     onPlayBook: (ChapterTrackEntity?) -> Unit,
     onTogglePlayPause: () -> Unit,
+    onSeekTo: (Long) -> Unit,
+    onSeekBy: (Long) -> Unit,
+    onSkipTrack: (Boolean) -> Unit,
+    onSpeedChange: (Float) -> Unit,
+    onSilenceChange: (Boolean, Int) -> Unit,
+    onSleepMinutes: (Int) -> Unit,
+    onSleepEndOfTrack: (Boolean) -> Unit,
+    onCancelSleep: () -> Unit,
+    onAddBookmark: (ChapterTrackEntity, Long, String) -> Unit,
     onToggleTrackFinished: (Long, Boolean) -> Unit,
     onMarkBookFinished: (Boolean) -> Unit,
     onResetProgress: () -> Unit,
@@ -112,11 +137,20 @@ fun BookDetailScreen(
                 .thenBy { it.title }
         ).orEmpty()
     }
+    val activeTrackId = playerState.currentTrack?.id
+    val activePositionMs = playerState.positionMs
+    val isPlaying = playerState.isPlaying
 
     var showMetadataSheet by remember { mutableStateOf(false) }
     var showChaptersSheet by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var showBookmarks by remember { mutableStateOf(false) }
+    var showDescription by remember { mutableStateOf(false) }
+    var showSpeedRow by remember { mutableStateOf(false) }
+    var showSilenceRow by remember { mutableStateOf(false) }
+    var showSleepDialog by remember { mutableStateOf(false) }
+    var showBookmarkDialog by remember { mutableStateOf(false) }
+    var bookmarkNote by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -289,66 +323,222 @@ fun BookDetailScreen(
                 }
             }
 
-            Button(
-                onClick = {
-                    if (tracks.any { it.id == activeTrackId }) onTogglePlayPause() else onPlayBook(null)
+            val isThisBookActive = tracks.any { it.id == activeTrackId }
+            val trackPosMs = if (isThisBookActive) playerState.positionMs else (currentTrack?.positionMs ?: 0L)
+            val trackDurMs = if (isThisBookActive && playerState.durationMs > 0L) {
+                playerState.durationMs
+            } else {
+                (currentTrack?.durationMs ?: 0L).coerceAtLeast(1L)
+            }
+            var isSeeking by remember { mutableStateOf(false) }
+            var seekSliderValue by remember(trackPosMs) { mutableFloatStateOf(trackPosMs.toFloat()) }
+
+            Slider(
+                value = (if (isSeeking) seekSliderValue else trackPosMs.toFloat()).coerceIn(0f, trackDurMs.toFloat()),
+                onValueChange = {
+                    isSeeking = true
+                    seekSliderValue = it
                 },
-                modifier = Modifier.fillMaxWidth().height(50.dp)
-            ) {
-                Icon(
-                    imageVector = if (isThisBookPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = null
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    stringResource(
-                        if (isThisBookPlaying) R.string.pause else R.string.play_resume
-                    )
-                )
-            }
-
-            // Chapters pull-up sheet trigger (prevents accidental chapter taps!)
-            OutlinedButton(
-                onClick = { showChaptersSheet = true },
+                onValueChangeFinished = {
+                    isSeeking = false
+                    if (isThisBookActive) {
+                        onSeekTo(seekSliderValue.toLong())
+                    } else {
+                        onPlayBook(currentTrack)
+                        onSeekTo(seekSliderValue.toLong())
+                    }
+                },
+                valueRange = 0f..trackDurMs.toFloat(),
                 modifier = Modifier.fillMaxWidth()
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(Icons.AutoMirrored.Filled.FormatListBulleted, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.chapters_header, tracks.size))
+                Text(
+                    text = Formatters.formatDuration(if (isSeeking) seekSliderValue.toLong() else trackPosMs),
+                    style = MaterialTheme.typography.labelSmall
+                )
+                Text(
+                    text = Formatters.formatDuration(trackDurMs),
+                    style = MaterialTheme.typography.labelSmall
+                )
             }
 
-            if (book.hasTagConflict) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showMetadataSheet = true }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = {
+                        if (isThisBookActive) onSkipTrack(false)
+                        else tracks.getOrNull((progress.currentTrackIndex - 1).coerceAtLeast(0))?.let { onPlayBook(it) }
+                    },
+                    enabled = tracks.size > 1
                 ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.WarningAmber,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(R.string.tag_conflict_banner_title),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                            Text(
-                                text = stringResource(R.string.tag_conflict_banner_desc),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
+                    Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.cd_prev_chapter))
+                }
+                IconButton(
+                    onClick = {
+                        if (isThisBookActive) onSeekBy(-10_000L)
+                        else {
+                            onPlayBook(currentTrack)
+                            onSeekBy(-10_000L)
                         }
                     }
+                ) {
+                    Icon(Icons.Default.Replay10, contentDescription = stringResource(R.string.cd_rewind_10))
+                }
+                FilledIconButton(
+                    onClick = {
+                        if (isThisBookActive) onTogglePlayPause() else onPlayBook(null)
+                    },
+                    modifier = Modifier.size(64.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isThisBookPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = stringResource(if (isThisBookPlaying) R.string.cd_pause else R.string.cd_play),
+                        modifier = Modifier.size(34.dp)
+                    )
+                }
+                IconButton(
+                    onClick = {
+                        if (isThisBookActive) onSeekBy(30_000L)
+                        else {
+                            onPlayBook(currentTrack)
+                            onSeekBy(30_000L)
+                        }
+                    }
+                ) {
+                    Icon(Icons.Default.Forward30, contentDescription = stringResource(R.string.cd_forward_30))
+                }
+                IconButton(
+                    onClick = {
+                        if (isThisBookActive) onSkipTrack(true)
+                        else tracks.getOrNull((progress.currentTrackIndex + 1).coerceAtMost(tracks.lastIndex.coerceAtLeast(0)))?.let { onPlayBook(it) }
+                    },
+                    enabled = tracks.size > 1
+                ) {
+                    Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.cd_next_chapter))
+                }
+            }
+
+            val currentSpeed = if (isThisBookActive) playerState.playbackSpeed else book.playbackSpeed
+            val currentSilence = if (isThisBookActive) playerState.skipSilence else book.skipSilence
+            val currentSilenceIntensity = if (isThisBookActive) playerState.silenceIntensity else book.silenceIntensity
+
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                FilterChip(
+                    selected = showSpeedRow,
+                    onClick = {
+                        showSpeedRow = !showSpeedRow
+                        showSilenceRow = false
+                    },
+                    label = { Text(String.format(Locale.getDefault(), "%.2fx", currentSpeed)) },
+                    leadingIcon = { Icon(Icons.Default.Speed, null, modifier = Modifier.size(16.dp)) }
+                )
+                FilterChip(
+                    selected = currentSilence || showSilenceRow,
+                    onClick = {
+                        val next = !currentSilence
+                        onSilenceChange(next, currentSilenceIntensity)
+                        showSilenceRow = next
+                        showSpeedRow = false
+                    },
+                    label = { Text(stringResource(R.string.player_silence)) },
+                    leadingIcon = { Icon(Icons.Default.GraphicEq, null, modifier = Modifier.size(16.dp)) }
+                )
+                FilterChip(
+                    selected = playerState.sleepTimerRemainingMs > 0L || playerState.sleepAtEndOfTrack,
+                    onClick = { showSleepDialog = true },
+                    label = {
+                        Text(
+                            when {
+                                playerState.sleepAtEndOfTrack -> stringResource(R.string.sleep_end_of_chapter_short)
+                                playerState.sleepTimerRemainingMs > 0L -> Formatters.formatDuration(playerState.sleepTimerRemainingMs)
+                                else -> stringResource(R.string.sleep_timer)
+                            }
+                        )
+                    },
+                    leadingIcon = { Icon(Icons.Default.Bedtime, null, modifier = Modifier.size(16.dp)) }
+                )
+                if (currentTrack != null) {
+                    FilterChip(
+                        selected = false,
+                        onClick = { showBookmarkDialog = true },
+                        label = { Text(stringResource(R.string.add_bookmark)) },
+                        leadingIcon = { Icon(Icons.Default.BookmarkAdd, null, modifier = Modifier.size(16.dp)) }
+                    )
+                }
+                if (book.description.isNotBlank()) {
+                    FilterChip(
+                        selected = showDescription,
+                        onClick = { showDescription = !showDescription },
+                        label = { Text(stringResource(R.string.field_description)) },
+                        leadingIcon = { Icon(Icons.Default.Description, null, modifier = Modifier.size(16.dp)) }
+                    )
+                }
+                FilterChip(
+                    selected = showChaptersSheet,
+                    onClick = { showChaptersSheet = true },
+                    label = { Text(stringResource(R.string.chapters_header, tracks.size)) },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.FormatListBulleted, null, modifier = Modifier.size(16.dp)) }
+                )
+            }
+
+            if (showSpeedRow) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf(0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 2.5f, 3.0f).forEach { speed ->
+                        FilterChip(
+                            selected = kotlin.math.abs(currentSpeed - speed) < 0.01f,
+                            onClick = { onSpeedChange(speed) },
+                            label = { Text(String.format(Locale.getDefault(), "%.2fx", speed)) }
+                        )
+                    }
+                }
+            }
+
+            if (showSilenceRow && currentSilence) {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf(
+                        0 to R.string.silence_soft,
+                        1 to R.string.silence_medium,
+                        2 to R.string.silence_strong
+                    ).forEach { (tier, resId) ->
+                        FilterChip(
+                            selected = currentSilenceIntensity == tier,
+                            onClick = { onSilenceChange(true, tier) },
+                            label = { Text(stringResource(resId)) }
+                        )
+                    }
+                }
+            }
+
+            if (showDescription && book.description.isNotBlank()) {
+                Surface(
+                    tonalElevation = 1.dp,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = book.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(14.dp)
+                    )
                 }
             }
 
@@ -422,16 +612,92 @@ fun BookDetailScreen(
                     }
                 }
             }
+        }
+    }
 
-            if (book.description.isNotBlank()) {
-                Text(
-                    text = book.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+    if (showSleepDialog) {
+        AlertDialog(
+            onDismissRequest = { showSleepDialog = false },
+            title = { Text(stringResource(R.string.sleep_timer)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(10, 15, 30, 45, 60).forEach { mins ->
+                        TextButton(
+                            onClick = {
+                                onSleepMinutes(mins)
+                                showSleepDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(R.string.sleep_minutes_option, mins))
+                        }
+                    }
+                    TextButton(
+                        onClick = {
+                            onSleepEndOfTrack(true)
+                            showSleepDialog = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.sleep_end_of_chapter))
+                    }
+                    if (playerState.sleepTimerRemainingMs > 0L || playerState.sleepAtEndOfTrack) {
+                        TextButton(
+                            onClick = {
+                                onCancelSleep()
+                                showSleepDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(stringResource(R.string.sleep_cancel))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSleepDialog = false }) {
+                    Text(stringResource(R.string.close))
+                }
+            }
+        )
+    }
+
+    if (showBookmarkDialog && book != null) {
+        val targetTrack = if (tracks.any { it.id == activeTrackId }) {
+            tracks.first { it.id == activeTrackId }
+        } else {
+            tracks.getOrNull(progress.currentTrackIndex)
+        }
+        val targetPos = if (tracks.any { it.id == activeTrackId }) playerState.positionMs else (targetTrack?.positionMs ?: 0L)
+        AlertDialog(
+            onDismissRequest = { showBookmarkDialog = false },
+            title = { Text(stringResource(R.string.add_bookmark)) },
+            text = {
+                OutlinedTextField(
+                    value = bookmarkNote,
+                    onValueChange = { bookmarkNote = it },
+                    label = { Text(stringResource(R.string.bookmark_note_hint)) },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (targetTrack != null) {
+                        onAddBookmark(targetTrack, targetPos, bookmarkNote)
+                    }
+                    bookmarkNote = ""
+                    showBookmarkDialog = false
+                }) {
+                    Text(stringResource(R.string.save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBookmarkDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
             }
-        }
+        )
     }
 
     if (showChaptersSheet && book != null) {

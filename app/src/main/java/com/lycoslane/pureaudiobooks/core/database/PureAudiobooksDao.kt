@@ -57,6 +57,9 @@ interface PureAudiobooksDao {
     @Query("SELECT * FROM audiobooks WHERE folderDocId = :folderDocId")
     suspend fun getAudiobooksByFolderDocId(folderDocId: String): List<AudiobookEntity>
 
+    @Query("SELECT * FROM audiobooks WHERE contentFingerprint = :fingerprint AND contentFingerprint != '' LIMIT 1")
+    suspend fun getAudiobookByFingerprint(fingerprint: String): AudiobookEntity?
+
     @Query("SELECT * FROM chapter_tracks WHERE audiobookId = :audiobookId ORDER BY sortOrder ASC, trackNumber ASC, title COLLATE NOCASE ASC")
     suspend fun getTracksForAudiobook(audiobookId: Long): List<ChapterTrackEntity>
 
@@ -153,9 +156,44 @@ interface PureAudiobooksDao {
     @Query("UPDATE chapter_tracks SET isFinished = :finished, positionMs = :positionMs WHERE audiobookId = :audiobookId")
     suspend fun resetAllTracksForBook(audiobookId: Long, finished: Boolean, positionMs: Long)
 
+    @Query(
+        """
+        UPDATE audiobooks SET
+            folderKey = :folderKey,
+            folderDocId = :folderDocId,
+            folderUri = :folderUri,
+            folderName = :folderName,
+            parentFolderName = :parentFolderName,
+            contentFingerprint = :contentFingerprint
+        WHERE id = :audiobookId
+        """
+    )
+    suspend fun updateAudiobookFolderLocation(
+        audiobookId: Long,
+        folderKey: String,
+        folderDocId: String,
+        folderUri: String,
+        folderName: String,
+        parentFolderName: String,
+        contentFingerprint: String
+    )
+
     @Query("UPDATE chapter_tracks SET fileUri = :fileUri, sortOrder = :sortOrder, trackNumber = :trackNumber, title = :title, durationMs = :durationMs, albumTag = :albumTag, artistTag = :artistTag WHERE id = :trackId")
     suspend fun updateTrackDetails(
         trackId: Long,
+        fileUri: String,
+        sortOrder: Int,
+        trackNumber: Int,
+        title: String,
+        durationMs: Long,
+        albumTag: String,
+        artistTag: String
+    )
+
+    @Query("UPDATE chapter_tracks SET guid = :guid, fileUri = :fileUri, sortOrder = :sortOrder, trackNumber = :trackNumber, title = :title, durationMs = :durationMs, albumTag = :albumTag, artistTag = :artistTag WHERE id = :trackId")
+    suspend fun updateTrackIdentity(
+        trackId: Long,
+        guid: String,
         fileUri: String,
         sortOrder: Int,
         trackNumber: Int,

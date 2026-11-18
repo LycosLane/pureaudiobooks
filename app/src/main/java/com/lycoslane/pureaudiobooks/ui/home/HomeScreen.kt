@@ -415,63 +415,74 @@ fun HomeScreen(
                             activePositionMs = activePositionMs,
                             fallbackTrackId = item.audiobook.lastTrackId
                         )
-                        Card(
-                            colors = CardDefaults.cardColors(),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .combinedClickable(
-                                    onClick = { onOpenBook(item.audiobook.id) },
-                                    onLongClick = { bookMenuTarget = item }
-                                )
+                        BookSwipeRow(
+                            isFinished = item.audiobook.isFinished,
+                            isHidden = item.audiobook.isHidden,
+                            onSwipeRightFinished = {
+                                onMarkFinished(item.audiobook.id, !item.audiobook.isFinished)
+                            },
+                            onSwipeLeftHide = {
+                                onSetHidden(item.audiobook.id, !item.audiobook.isHidden)
+                            }
                         ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Card(
+                                colors = CardDefaults.cardColors(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .combinedClickable(
+                                        onClick = { onOpenBook(item.audiobook.id) },
+                                        onLongClick = { bookMenuTarget = item }
+                                    )
                             ) {
-                                BookCoverImage(
-                                    url = item.audiobook.artworkUrl,
-                                    contentDescription = item.audiobook.title,
-                                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp))
-                                )
-                                Spacer(Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = item.audiobook.title,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        if (item.audiobook.hasTagConflict) {
-                                            Icon(
-                                                Icons.Default.WarningAmber,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.error,
-                                                modifier = Modifier.size(18.dp)
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    BookCoverImage(
+                                        url = item.audiobook.artworkUrl,
+                                        contentDescription = item.audiobook.title,
+                                        modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp))
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = item.audiobook.title,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            if (item.audiobook.hasTagConflict) {
+                                                Icon(
+                                                    Icons.Default.WarningAmber,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        }
+                                        if (item.audiobook.author.isNotBlank()) {
+                                            Text(
+                                                text = item.audiobook.author,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
                                             )
                                         }
-                                    }
-                                    if (item.audiobook.author.isNotBlank()) {
+                                        Spacer(Modifier.height(6.dp))
+                                        LinearProgressIndicator(
+                                            progress = { summary.fraction },
+                                            modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp))
+                                        )
+                                        Spacer(Modifier.height(2.dp))
                                         Text(
-                                            text = item.audiobook.author,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                            text = "${(summary.fraction * 100).toInt()}% · ${Formatters.formatCompactHoursMinutes(summary.remainingMs)} ${stringResource(R.string.remaining_suffix)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-                                    Spacer(Modifier.height(6.dp))
-                                    LinearProgressIndicator(
-                                        progress = { summary.fraction },
-                                        modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp))
-                                    )
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(
-                                        text = "${(summary.fraction * 100).toInt()}% · ${Formatters.formatCompactHoursMinutes(summary.remainingMs)} ${stringResource(R.string.remaining_suffix)}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
                                 }
                             }
                         }
@@ -574,5 +585,133 @@ fun HomeScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun BookSwipeRow(
+    isFinished: Boolean,
+    isHidden: Boolean,
+    onSwipeRightFinished: () -> Unit,
+    onSwipeLeftHide: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val latestRight by rememberUpdatedState(onSwipeRightFinished)
+    val latestLeft by rememberUpdatedState(onSwipeLeftHide)
+    val haptic = LocalHapticFeedback.current
+    val thresholdFraction = 0.45f
+    var rowWidthPx by remember { mutableIntStateOf(0) }
+    var dismissStateHolder: SwipeToDismissBoxState? = null
+
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.Settled) {
+                true
+            } else {
+                val offset = runCatching { dismissStateHolder?.requireOffset() }.getOrNull() ?: 0f
+                val fraction = if (rowWidthPx > 0) {
+                    kotlin.math.abs(offset) / rowWidthPx.toFloat()
+                } else {
+                    0f
+                }
+                fraction >= thresholdFraction
+            }
+        },
+        positionalThreshold = { totalDistance -> totalDistance * thresholdFraction }
+    )
+    dismissStateHolder = dismissState
+
+    val swipeFraction by remember {
+        derivedStateOf {
+            val offset = runCatching { dismissState.requireOffset() }.getOrDefault(0f)
+            if (rowWidthPx > 0) {
+                (kotlin.math.abs(offset) / rowWidthPx.toFloat()).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
+        }
+    }
+    val reachedThreshold = swipeFraction >= thresholdFraction
+
+    LaunchedEffect(reachedThreshold) {
+        if (reachedThreshold) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+    }
+
+    LaunchedEffect(dismissState.currentValue) {
+        val value = dismissState.currentValue
+        if (value != SwipeToDismissBoxValue.Settled) {
+            dismissState.snapTo(SwipeToDismissBoxValue.Settled)
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> latestRight()
+                SwipeToDismissBoxValue.EndToStart -> latestLeft()
+                SwipeToDismissBoxValue.Settled -> Unit
+            }
+        }
+    }
+
+    SwipeToDismissBox(
+        state = dismissState,
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .onSizeChanged { rowWidthPx = it.width },
+        backgroundContent = {
+            val dir = dismissState.dismissDirection
+            val alignment = when (dir) {
+                SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
+                SwipeToDismissBoxValue.EndToStart -> Alignment.CenterEnd
+                else -> Alignment.Center
+            }
+            val baseColor = when (dir) {
+                SwipeToDismissBoxValue.StartToEnd -> Color(0xFF2E7D32)
+                SwipeToDismissBoxValue.EndToStart -> Color(0xFFBF360C)
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            }
+            val bgColor = if (reachedThreshold || dir == SwipeToDismissBoxValue.Settled) {
+                baseColor
+            } else {
+                baseColor.copy(alpha = 0.35f + 0.35f * (swipeFraction / thresholdFraction))
+            }
+            val icon = when (dir) {
+                SwipeToDismissBoxValue.StartToEnd -> if (isFinished) Icons.Default.Replay else Icons.Default.CheckCircle
+                SwipeToDismissBoxValue.EndToStart -> if (isHidden) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                else -> Icons.Default.CheckCircle
+            }
+            val label = when (dir) {
+                SwipeToDismissBoxValue.StartToEnd -> stringResource(
+                    if (isFinished) R.string.mark_unfinished else R.string.mark_finished
+                )
+                SwipeToDismissBoxValue.EndToStart -> stringResource(
+                    if (isHidden) R.string.unhide_book else R.string.hide_book
+                )
+                else -> ""
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(bgColor)
+                    .padding(horizontal = 20.dp),
+                contentAlignment = alignment
+            ) {
+                if (dir != SwipeToDismissBoxValue.Settled) {
+                    Row(
+                        modifier = Modifier.alpha(if (reachedThreshold) 1f else 0.7f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (dir == SwipeToDismissBoxValue.StartToEnd) {
+                            Icon(icon, contentDescription = null, tint = Color.White)
+                            Text(label, color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                        } else {
+                            Text(label, color = Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                            Icon(icon, contentDescription = null, tint = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+    ) {
+        content()
     }
 }

@@ -127,12 +127,18 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
         }
     }
 
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDetailBookId = navBackStackEntry?.arguments?.getLong("bookId")
+    val isViewingCurrentBookDetail = navBackStackEntry?.destination?.route?.startsWith("detail/") == true &&
+        currentDetailBookId != null &&
+        currentDetailBookId == playerState.currentBook?.id
+
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             Column {
-                if (playerState.currentTrack != null) {
+                if (playerState.currentTrack != null && !isViewingCurrentBookDetail) {
                     MiniPlayer(
                         state = playerState,
                         onTogglePlayPause = { app.playerController.togglePlayPause() },
@@ -167,7 +173,22 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     },
                     onMarkFinished = { bookId, finished -> libraryViewModel.markBookFinished(bookId, finished) },
                     onResetProgress = { bookId -> libraryViewModel.resetBookProgress(bookId) },
-                    onSetHidden = { bookId, hidden -> libraryViewModel.setBookHidden(bookId, hidden) },
+                    onSetHidden = { bookId, hidden ->
+                        libraryViewModel.setBookHidden(bookId, hidden)
+                        if (hidden) {
+                            scope.launch {
+                                snackbarHostState.currentSnackbarData?.dismiss()
+                                val result = snackbarHostState.showSnackbar(
+                                    message = context.getString(R.string.snackbar_book_hidden),
+                                    actionLabel = context.getString(R.string.action_undo),
+                                    duration = SnackbarDuration.Short
+                                )
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    libraryViewModel.setBookHidden(bookId, false)
+                                }
+                            }
+                        }
+                    },
                     onMoveToTrash = { bookId -> libraryViewModel.moveToTrash(bookId) },
                     onRestoreFromTrash = { bookId -> libraryViewModel.restoreFromTrash(bookId) },
                     onPermanentlyDelete = { bookId -> libraryViewModel.permanentlyDelete(bookId) }
@@ -199,12 +220,24 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     onlineLookupEnabled = settings.onlineLookupEnabled,
                     onlineResults = onlineResults,
                     isSearchingOnline = isSearchingOnline,
-                    activeTrackId = playerState.currentTrack?.id,
-                    activePositionMs = playerState.positionMs,
-                    isPlaying = playerState.isPlaying,
+                    playerState = playerState,
                     onBack = { navController.popBackStack() },
                     onPlayBook = { track -> detailViewModel.playBook(track) },
                     onTogglePlayPause = { app.playerController.togglePlayPause() },
+                    onSeekTo = { app.playerController.seekTo(it) },
+                    onSeekBy = { app.playerController.seekBy(it) },
+                    onSkipTrack = { app.playerController.skipTrack(it) },
+                    onSpeedChange = { app.playerController.setPlaybackSpeed(it) },
+                    onSilenceChange = { enabled, intensity -> app.playerController.setSkipSilence(enabled, intensity) },
+                    onSleepMinutes = { app.playerController.startSleepTimerMinutes(it) },
+                    onSleepEndOfTrack = { app.playerController.setSleepAtEndOfTrack(it) },
+                    onCancelSleep = { app.playerController.cancelSleepTimer() },
+                    onAddBookmark = { track, posMs, note ->
+                        scope.launch {
+                            app.repository.addBookmark(bookId, track, posMs, note)
+                            snackbarHostState.showSnackbar(context.getString(R.string.bookmark_saved))
+                        }
+                    },
                     onToggleTrackFinished = { tid, finished -> detailViewModel.setTrackFinished(tid, finished) },
                     onMarkBookFinished = { finished -> detailViewModel.markBookFinished(finished) },
                     onResetProgress = { detailViewModel.resetBookProgress() },
