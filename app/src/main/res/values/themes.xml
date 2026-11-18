@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.PureAudiobooks" parent="android:Theme.Material.NoActionBar" />
+</resources>

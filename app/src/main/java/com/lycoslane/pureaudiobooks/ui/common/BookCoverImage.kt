@@ -1,0 +1,199 @@
+package com.lycoslane.pureaudiobooks.ui.common
+
+import android.content.Context
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.util.LruCache
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import com.lycoslane.pureaudiobooks.core.network.BoundedInputStream
+import com.lycoslane.pureaudiobooks.core.network.NetworkSecurity
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import java.io.File
+import java.net.HttpURLConnection
+import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
+
+private object NativeBookImageCache {
+    private const val MAX_IMAGE_BYTES = 8L * 1024 * 1024
+    private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val inFlight = ConcurrentHashMap<String, Deferred<ImageBitmap?>>()
+
+    private val memoryCache = object : LruCache<String, ImageBitmap>(24 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: ImageBitmap): Int = value.width * value.height * 4
+    }
+
+    fun getCached(url: String): ImageBitmap? = if (url.isBlank()) null else memoryCache.get(url)
+
+    suspend fun load(context: Context, url: String): ImageBitmap? {
+        if (url.isBlank()) return null
+        memoryCache.get(url)?.let { return it }
+
+        val deferred = inFlight.computeIfAbsent(url) {
+            cacheScope.async {
+                try {
+                    loadInternal(context.applicationContext, url)
+                } finally {
+                    inFlight.remove(url)
+                }
+            }
+        }
+        return deferred.await()
+    }
+
+    private fun loadInternal(appContext: Context, url: String): ImageBitmap? {
+        memoryCache.get(url)?.let { return it }
+
+        if (url.startsWith("content://")) {
+            val uri = Uri.parse(url)
+            val bitmap = runCatching {
+                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                appContext.contentResolver.openInputStream(uri)?.use {
+                    BitmapFactory.decodeStream(it, null, opts)
+                }
+                if (opts.outWidth <= 0 || opts.outHeight <= 0) return@runCatching null
+                opts.inSampleSize = calculateInSampleSize(opts.outWidth, opts.outHeight, 512, 512)
+                opts.inJustDecodeBounds = false
+                appContext.contentResolver.openInputStream(uri)?.use {
+                    BitmapFactory.decodeStream(it, null, opts)
+                }
+            }.getOrNull() ?: return null
+            val imageBitmap = bitmap.asImageBitmap()
+            memoryCache.put(url, imageBitmap)
+            return imageBitmap
+        }
+
+        if (url.startsWith("/") || url.startsWith("file://")) {
+            val path = if (url.startsWith("file://")) Uri.parse(url).path ?: "" else url
+            val file = File(path)
+            val allowedRoots = listOf(
+                File(appContext.filesDir, "local_covers").canonicalPath,
+                appContext.cacheDir.canonicalPath
+            )
+            val allowed = runCatching {
+                val canonical = file.canonicalPath
+                allowedRoots.any { canonical.startsWith("$it/") }
+            }.getOrDefault(false)
+            if (!allowed || !file.exists()) return null
+            val bitmap = decodeSampledFile(file) ?: return null
+            val imageBitmap = bitmap.asImageBitmap()
+            memoryCache.put(url, imageBitmap)
+            return imageBitmap
+        }
+
+        if (!NetworkSecurity.isValidHttpUrl(url)) return null
+        val cacheDir = File(appContext.cacheDir, "artwork_preview").apply { mkdirs() }
+        val file = File(cacheDir, sha256(url))
+        val bitmap = if (file.exists() && file.length() > 0L) {
+            decodeSampledFile(file)
+        } else {
+            downloadPreview(url, file)
+        } ?: return null
+        val imageBitmap = bitmap.asImageBitmap()
+        memoryCache.put(url, imageBitmap)
+        return imageBitmap
+    }
+
+    private fun downloadPreview(url: String, target: File): android.graphics.Bitmap? {
+        var conn: HttpURLConnection? = null
+        return try {
+            conn = NetworkSecurity.openValidatedConnection(url, connectTimeoutMs = 8_000, readTimeoutMs = 10_000)
+            if (conn.responseCode !in 200..299) return null
+            BoundedInputStream(conn.inputStream, MAX_IMAGE_BYTES).use { input ->
+                target.outputStream().use { out -> input.copyTo(out) }
+            }
+            decodeSampledFile(target)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            target.delete()
+            null
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+    private fun decodeSampledFile(file: File): android.graphics.Bitmap? {
+        val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, opts)
+        if (opts.outWidth <= 0 || opts.outHeight <= 0) return null
+        opts.inSampleSize = calculateInSampleSize(opts.outWidth, opts.outHeight, 512, 512)
+        opts.inJustDecodeBounds = false
+        return BitmapFactory.decodeFile(file.absolutePath, opts)
+    }
+
+    private fun calculateInSampleSize(width: Int, height: Int, reqW: Int, reqH: Int): Int {
+        var inSampleSize = 1
+        if (height > reqH || width > reqW) {
+            val halfH = height / 2
+            val halfW = width / 2
+            while ((halfH / inSampleSize) >= reqH && (halfW / inSampleSize) >= reqW) {
+                inSampleSize *= 2
+            }
+        }
+        return inSampleSize
+    }
+
+    private fun sha256(input: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray())
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+}
+
+@Composable
+fun BookCoverImage(
+    url: String,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop
+) {
+    val context = LocalContext.current
+    var imageBitmap by remember(url) { mutableStateOf(NativeBookImageCache.getCached(url)) }
+
+    LaunchedEffect(url) {
+        imageBitmap = NativeBookImageCache.load(context, url)
+    }
+
+    val bmp = imageBitmap
+    if (bmp != null) {
+        Image(
+            bitmap = bmp,
+            contentDescription = contentDescription,
+            contentScale = contentScale,
+            modifier = modifier
+        )
+    } else {
+        Box(
+            modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                contentDescription = contentDescription,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+        }
+    }
+}

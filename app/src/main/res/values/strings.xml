@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PureAudiobooks</string>
+
+    <string name="cd_scan">Scan folder</string>
+    <string name="cd_toggle_layout">Toggle grid or list</string>
+    <string name="cd_settings">Settings</string>
+    <string name="cd_back">Back</string>
+    <string name="cd_edit_metadata">Edit metadata</string>
+    <string name="cd_more">More options</string>
+    <string name="cd_play">Play</string>
+    <string name="cd_pause">Pause</string>
+    <string name="cd_prev_chapter">Previous chapter</string>
+    <string name="cd_next_chapter">Next chapter</string>
+    <string name="cd_rewind_10">Rewind 10 seconds</string>
+    <string name="cd_forward_30">Forward 30 seconds</string>
+
+    <string name="empty_no_folder_title">No audiobook folder selected</string>
+    <string name="empty_no_folder_desc">Select the folder on your device where your audiobooks are stored.</string>
+    <string name="pick_audiobooks_folder">Select audiobooks folder</string>
+    <string name="rescan">Rescan</string>
+    <string name="search_library_hint">Search title or author…</string>
+    <string name="empty_filter_results">No audiobooks match this filter.</string>
+
+    <string name="filter_all">All</string>
+    <string name="filter_in_progress">In progress</string>
+    <string name="filter_finished">Finished</string>
+    <string name="filter_conflicts">Tag conflicts</string>
+    <string name="filter_trash">Trash</string>
+
+    <string name="tracks_count">%1$d tracks</string>
+    <string name="remaining_suffix">left</string>
+    <string name="open_book">Open audiobook</string>
+    <string name="move_to_trash">Move to trash</string>
+    <string name="restore">Restore</string>
+    <string name="delete_permanently">Delete permanently</string>
+    <string name="delete_permanently_confirm">Permanently delete \"%1$s\"? If write access is granted, the local audio files will also be removed.</string>
+
+    <string name="play_resume">Play / Resume</string>
+    <string name="pause">Pause</string>
+    <string name="mark_finished">Mark as finished</string>
+    <string name="mark_unfinished">Mark as unfinished</string>
+    <string name="finished">Finished</string>
+    <string name="chapters_header">Chapters (%1$d)</string>
+    <string name="chapter_prefix">Chapter %1$d/%2$d</string>
+
+    <string name="tag_conflict_banner_title">Incomplete or mixed tags detected</string>
+    <string name="tag_conflict_banner_desc">Tap to choose between folder name and file tags, or split albums.</string>
+
+    <string name="metadata_resolver_title">Audiobook Metadata</string>
+    <string name="choose_title_source">Choose title source</string>
+    <string name="choose_author_source">Choose author source</string>
+    <string name="source_folder_name">Folder</string>
+    <string name="source_album_tag_count">Tag · %1$d tracks</string>
+    <string name="split_by_album_action">Split folder into %1$d books by Album tag</string>
+    <string name="split_completed">Split into %1$d audiobooks</string>
+    <string name="field_title">Title</string>
+    <string name="field_author">Author</string>
+    <string name="field_description">Description</string>
+    <string name="online_lookup_section">Online lookup (optional)</string>
+    <string name="search_query_hint">Search title or author</string>
+    <string name="save_and_write_sidecar">Save (info.txt &amp; cover.jpg)</string>
+    <string name="metadata_saved">Metadata saved</string>
+
+    <string name="bookmarks_header">Bookmarks (%1$d)</string>
+    <string name="add_bookmark">Bookmark</string>
+    <string name="bookmark_note_hint">Optional note…</string>
+    <string name="bookmark_saved">Bookmark saved</string>
+    <string name="show">Show</string>
+    <string name="hide">Hide</string>
+
+    <string name="playback_speed_label">Speed: %1$.2fx</string>
+    <string name="skip_silence">Skip silence</string>
+    <string name="silence_soft">Soft</string>
+    <string name="silence_medium">Medium</string>
+    <string name="silence_strong">Strong</string>
+
+    <string name="sleep_timer">Sleep timer</string>
+    <string name="sleep_minutes_option">%1$d minutes</string>
+    <string name="sleep_end_of_chapter">End of current chapter</string>
+    <string name="sleep_end_of_chapter_short">Chapter end</string>
+    <string name="sleep_cancel">Cancel timer</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_folder_section">Library folder</string>
+    <string name="settings_online_lookup">Allow online metadata lookup</string>
+    <string name="settings_online_lookup_desc">Search iTunes &amp; Open Library on demand and save info.txt + cover.jpg locally.</string>
+    <string name="settings_trash_section">Trash &amp; auto-cleanup</string>
+    <string name="settings_trash_retention">Keep items in trash for</string>
+    <string name="retention_immediate">0h (immediate)</string>
+    <string name="retention_24h">24h</string>
+    <string name="retention_48h">48h</string>
+    <string name="retention_72h">72h</string>
+    <string name="settings_auto_trash_finished">Auto-move finished books to trash</string>
+    <string name="auto_trash_never">Never</string>
+    <string name="auto_trash_immediate">Immediately</string>
+    <string name="auto_trash_2d">After 2 days</string>
+    <string name="auto_trash_7d">After 7 days</string>
+
+    <string name="settings_playback_section">Playback</string>
+    <string name="settings_audio_normalization">Audio normalization</string>
+    <string name="settings_bt_seek">Bluetooth Next/Prev seeks (-10s/+30s)</string>
+    <string name="settings_smart_rewind">Smart rewind after pause</string>
+    <string name="off">Off</string>
+    <string name="settings_language">Language</string>
+    <string name="backup_export">Export backup</string>
+    <string name="backup_import">Import backup</string>
+    <string name="backup_exported">Backup exported</string>
+    <string name="backup_imported">Restored %1$d audiobooks</string>
+    <string name="backup_import_failed">Could not import backup</string>
+
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="close">Close</string>
+</resources>

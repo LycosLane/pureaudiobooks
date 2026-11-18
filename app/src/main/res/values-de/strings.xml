@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PureAudiobooks</string>
+
+    <string name="cd_scan">Ordner scannen</string>
+    <string name="cd_toggle_layout">Raster oder Liste umschalten</string>
+    <string name="cd_settings">Einstellungen</string>
+    <string name="cd_back">Zurück</string>
+    <string name="cd_edit_metadata">Metadaten bearbeiten</string>
+    <string name="cd_more">Weitere Optionen</string>
+    <string name="cd_play">Abspielen</string>
+    <string name="cd_pause">Pause</string>
+    <string name="cd_prev_chapter">Vorheriges Kapitel</string>
+    <string name="cd_next_chapter">Nächstes Kapitel</string>
+    <string name="cd_rewind_10">10 Sekunden zurück</string>
+    <string name="cd_forward_30">30 Sekunden vor</string>
+
+    <string name="empty_no_folder_title">Kein Hörbuch-Ordner ausgewählt</string>
+    <string name="empty_no_folder_desc">Wähle den Ordner auf deinem Gerät aus, in dem deine Hörbücher liegen.</string>
+    <string name="pick_audiobooks_folder">Hörbuch-Ordner wählen</string>
+    <string name="rescan">Neu scannen</string>
+    <string name="search_library_hint">Titel oder Autor suchen…</string>
+    <string name="empty_filter_results">Keine Hörbücher für diesen Filter.</string>
+
+    <string name="filter_all">Alle</string>
+    <string name="filter_in_progress">Begonnen</string>
+    <string name="filter_finished">Fertig</string>
+    <string name="filter_conflicts">Tag-Konflikte</string>
+    <string name="filter_trash">Papierkorb</string>
+
+    <string name="tracks_count">%1$d Kapitel</string>
+    <string name="remaining_suffix">übrig</string>
+    <string name="open_book">Hörbuch öffnen</string>
+    <string name="move_to_trash">In Papierkorb</string>
+    <string name="restore">Wiederherstellen</string>
+    <string name="delete_permanently">Endgültig löschen</string>
+    <string name="delete_permanently_confirm">\"%1$s\" endgültig löschen? Bei vorhandenen Schreibrechten werden auch die lokalen Audiodateien gelöscht.</string>
+
+    <string name="play_resume">Abspielen / Weiterhören</string>
+    <string name="pause">Pause</string>
+    <string name="mark_finished">Als gehört markieren</string>
+    <string name="mark_unfinished">Als ungehört markieren</string>
+    <string name="finished">Gehört</string>
+    <string name="chapters_header">Kapitel (%1$d)</string>
+    <string name="chapter_prefix">Kapitel %1$d/%2$d</string>
+
+    <string name="tag_conflict_banner_title">Unvollständige oder gemischte Tags</string>
+    <string name="tag_conflict_banner_desc">Tippen, um Ordnername oder Datei-Tags zu wählen oder Alben aufzuteilen.</string>
+
+    <string name="metadata_resolver_title">Hörbuch-Metadaten</string>
+    <string name="choose_title_source">Titelquelle wählen</string>
+    <string name="choose_author_source">Autor wählen</string>
+    <string name="source_folder_name">Ordner</string>
+    <string name="source_album_tag_count">Tag · %1$d Dateien</string>
+    <string name="split_by_album_action">Ordner nach Album-Tag in %1$d Bücher aufteilen</string>
+    <string name="split_completed">In %1$d Hörbücher aufgeteilt</string>
+    <string name="field_title">Titel</string>
+    <string name="field_author">Autor</string>
+    <string name="field_description">Beschreibung</string>
+    <string name="online_lookup_section">Online-Suche (optional)</string>
+    <string name="search_query_hint">Titel oder Autor suchen</string>
+    <string name="save_and_write_sidecar">Speichern (info.txt &amp; cover.jpg)</string>
+    <string name="metadata_saved">Metadaten gespeichert</string>
+
+    <string name="bookmarks_header">Lesezeichen (%1$d)</string>
+    <string name="add_bookmark">Lesezeichen</string>
+    <string name="bookmark_note_hint">Optionale Notiz…</string>
+    <string name="bookmark_saved">Lesezeichen gespeichert</string>
+    <string name="show">Anzeigen</string>
+    <string name="hide">Ausblenden</string>
+
+    <string name="playback_speed_label">Tempo: %1$.2fx</string>
+    <string name="skip_silence">Stille überspringen</string>
+    <string name="silence_soft">Sanft</string>
+    <string name="silence_medium">Mittel</string>
+    <string name="silence_strong">Stark</string>
+
+    <string name="sleep_timer">Sleep-Timer</string>
+    <string name="sleep_minutes_option">%1$d Minuten</string>
+    <string name="sleep_end_of_chapter">Ende des aktuellen Kapitels</string>
+    <string name="sleep_end_of_chapter_short">Kapitelende</string>
+    <string name="sleep_cancel">Timer abbrechen</string>
+
+    <string name="settings_title">Einstellungen</string>
+    <string name="settings_folder_section">Bibliotheks-Ordner</string>
+    <string name="settings_online_lookup">Online-Metadatensuche erlauben</string>
+    <string name="settings_online_lookup_desc">Auf Wunsch bei iTunes &amp; Open Library suchen und info.txt + cover.jpg lokal speichern.</string>
+    <string name="settings_trash_section">Papierkorb &amp; Aufräumen</string>
+    <string name="settings_trash_retention">Im Papierkorb aufbewahren</string>
+    <string name="retention_immediate">0h (sofort)</string>
+    <string name="retention_24h">24h</string>
+    <string name="retention_48h">48h</string>
+    <string name="retention_72h">72h</string>
+    <string name="settings_auto_trash_finished">Gehörte Bücher automatisch in Papierkorb</string>
+    <string name="auto_trash_never">Nie</string>
+    <string name="auto_trash_immediate">Sofort</string>
+    <string name="auto_trash_2d">Nach 2 Tagen</string>
+    <string name="auto_trash_7d">Nach 7 Tagen</string>
+
+    <string name="settings_playback_section">Wiedergabe</string>
+    <string name="settings_audio_normalization">Lautstärke-Normalisierung</string>
+    <string name="settings_bt_seek">Bluetooth Weiter/Zurück spult (-10s/+30s)</string>
+    <string name="settings_smart_rewind">Smart-Rewind nach Pause</string>
+    <string name="off">Aus</string>
+    <string name="settings_language">Sprache</string>
+    <string name="backup_export">Backup exportieren</string>
+    <string name="backup_import">Backup importieren</string>
+    <string name="backup_exported">Backup exportiert</string>
+    <string name="backup_imported">%1$d Hörbücher wiederhergestellt</string>
+    <string name="backup_import_failed">Backup konnte nicht importiert werden</string>
+
+    <string name="save">Speichern</string>
+    <string name="cancel">Abbrechen</string>
+    <string name="close">Schließen</string>
+</resources>
