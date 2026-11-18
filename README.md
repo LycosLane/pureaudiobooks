@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icons/app_icon.png" width="128" alt="PureAudiobooks Fedora Book Icon" />
+</p>
+
 # PureAudiobooks
 
 [![Platform: Android](https://img.shields.io/badge/Platform-Android%2010%2B-0078D6.svg)](https://github.com/LycosLane/pureaudiobooks)
