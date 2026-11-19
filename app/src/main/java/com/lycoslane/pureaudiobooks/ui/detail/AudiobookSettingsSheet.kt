@@ -3,7 +3,6 @@ package com.lycoslane.pureaudiobooks.ui.detail
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -51,6 +50,9 @@ import androidx.compose.ui.unit.dp
 import com.lycoslane.pureaudiobooks.R
 import com.lycoslane.pureaudiobooks.core.audio.AudioMonoMode
 import com.lycoslane.pureaudiobooks.core.audio.AudioOverride
+import com.lycoslane.pureaudiobooks.core.audio.SilenceOverride
+import com.lycoslane.pureaudiobooks.core.audio.SmartRewindOverride
+import com.lycoslane.pureaudiobooks.core.audio.SpeedOverride
 import com.lycoslane.pureaudiobooks.core.database.AudiobookEntity
 import com.lycoslane.pureaudiobooks.core.preferences.AppSettings
 import com.lycoslane.pureaudiobooks.ui.common.BookCoverImage
@@ -58,7 +60,7 @@ import com.lycoslane.pureaudiobooks.ui.common.Formatters
 import com.lycoslane.pureaudiobooks.ui.common.MonoModeSelector
 import com.lycoslane.pureaudiobooks.ui.common.PureSegmentedControl
 import com.lycoslane.pureaudiobooks.ui.common.monoModeLabel
-import com.lycoslane.pureaudiobooks.ui.player.SilenceControlPanel
+import com.lycoslane.pureaudiobooks.ui.common.pinchToZoomTextScale
 import com.lycoslane.pureaudiobooks.ui.player.SpeedControlPanel
 import com.lycoslane.pureaudiobooks.ui.settings.SectionDivider
 import com.lycoslane.pureaudiobooks.ui.settings.SettingsSection
@@ -73,10 +75,12 @@ fun AudiobookSettingsSheet(
     remainingRawMs: Long?,
     globalSettings: AppSettings,
     onDismiss: () -> Unit,
-    onSetSpeed: (Float) -> Unit,
-    onSetSilenceMode: (Boolean, Int) -> Unit,
+    onSetSpeedOverride: (Float) -> Unit,
+    onSetSilenceModeOverride: (Int) -> Unit,
     onSetMonoModeOverride: (Int) -> Unit,
     onSetNormalizationOverride: (Int) -> Unit,
+    onSetSmartRewindOverride: (Int) -> Unit,
+    onTextScaleChange: (Float) -> Unit,
     onSetHidden: (Boolean) -> Unit,
     onMarkFinished: (Boolean) -> Unit,
     onResetProgress: () -> Unit,
@@ -96,6 +100,10 @@ fun AudiobookSettingsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .pinchToZoomTextScale(
+                    textScale = globalSettings.textScale,
+                    onTextScaleChange = onTextScaleChange
+                )
                 .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(horizontal = 16.dp)
@@ -127,7 +135,6 @@ fun AudiobookSettingsSheet(
                 }
             }
 
-            // Header with cover + book title + optional progress badge
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -180,7 +187,6 @@ fun AudiobookSettingsSheet(
                 }
             }
 
-            // Quick Mode puts unified status card first so pulling up seamlessly exposes the rest below
             if (startInQuickMode) {
                 AudiobookStatusActionsCard(
                     book = book,
@@ -226,10 +232,11 @@ fun AudiobookSettingsSheet(
                 book = book,
                 remainingRawMs = remainingRawMs,
                 globalSettings = globalSettings,
-                onSetSpeed = onSetSpeed,
-                onSetSilenceMode = onSetSilenceMode,
+                onSetSpeedOverride = onSetSpeedOverride,
+                onSetSilenceModeOverride = onSetSilenceModeOverride,
                 onSetMonoModeOverride = onSetMonoModeOverride,
                 onSetNormalizationOverride = onSetNormalizationOverride,
+                onSetSmartRewindOverride = onSetSmartRewindOverride,
                 onApplyToAllAudiobooks = onApplyToAllAudiobooks
             )
 
@@ -260,51 +267,110 @@ private fun AudiobookAudioSettingsSection(
     book: AudiobookEntity,
     remainingRawMs: Long?,
     globalSettings: AppSettings,
-    onSetSpeed: (Float) -> Unit,
-    onSetSilenceMode: (Boolean, Int) -> Unit,
+    onSetSpeedOverride: (Float) -> Unit,
+    onSetSilenceModeOverride: (Int) -> Unit,
     onSetMonoModeOverride: (Int) -> Unit,
     onSetNormalizationOverride: (Int) -> Unit,
+    onSetSmartRewindOverride: (Int) -> Unit,
     onApplyToAllAudiobooks: () -> Unit
 ) {
     SettingsSection(title = stringResource(R.string.audiobook_settings_section_audio)) {
-        SpeedControlPanel(
-            targetId = book.id,
-            currentSpeed = book.playbackSpeed,
-            remainingRawMs = remainingRawMs,
-            onSetSpeed = onSetSpeed
+        // 1. Playback Speed (Global | Custom)
+        val isCustomSpeed = !SpeedOverride.isInherit(book.speedOverride)
+        val effectiveSpeed = SpeedOverride.resolve(globalSettings.defaultPlaybackSpeed, book.speedOverride)
+        OverrideHeader(
+            title = stringResource(R.string.player_speed_title),
+            globalLabel = if (!isCustomSpeed) Formatters.formatPlaybackSpeed(globalSettings.defaultPlaybackSpeed) else null
         )
-
-        SectionDivider()
-
-        SilenceControlPanel(
-            skipSilence = book.skipSilence,
-            silenceIntensity = book.silenceIntensity,
-            onSetSilenceMode = onSetSilenceMode
-        )
-
-        SectionDivider()
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.settings_audio_normalization),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium
-            )
-            if (book.audioNormalizationOverride == AudioOverride.INHERIT) {
-                val globalState = stringResource(
-                    if (globalSettings.audioNormalizationEnabled) R.string.override_on else R.string.override_off
-                )
-                Text(
-                    text = stringResource(R.string.override_global_state, globalState),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        Spacer(Modifier.height(8.dp))
+        PureSegmentedControl(
+            options = listOf(
+                false to stringResource(R.string.override_global),
+                true to stringResource(R.string.override_custom)
+            ),
+            selected = isCustomSpeed,
+            onSelect = { custom ->
+                if (custom) {
+                    if (!isCustomSpeed) onSetSpeedOverride(globalSettings.defaultPlaybackSpeed)
+                } else {
+                    onSetSpeedOverride(SpeedOverride.INHERIT)
+                }
             }
+        )
+        if (isCustomSpeed) {
+            Spacer(Modifier.height(10.dp))
+            SpeedControlPanel(
+                targetId = book.id,
+                currentSpeed = effectiveSpeed,
+                remainingRawMs = remainingRawMs,
+                onSetSpeed = { onSetSpeedOverride(it) }
+            )
         }
+
+        SectionDivider()
+
+        // 2. Skip Silence (Global | Off | On -> Soft/Medium/Strong)
+        val normSilenceOv = SilenceOverride.normalize(book.silenceModeOverride)
+        val silenceTriState = when (normSilenceOv) {
+            SilenceOverride.INHERIT -> -1
+            SilenceOverride.OFF -> 0
+            else -> 1
+        }
+        val globalSilenceText = if (!globalSettings.defaultSkipSilence) {
+            stringResource(R.string.override_off)
+        } else {
+            silenceIntensityLabel(globalSettings.defaultSilenceIntensity)
+        }
+        OverrideHeader(
+            title = stringResource(R.string.skip_silence),
+            globalLabel = if (silenceTriState == -1) globalSilenceText else null
+        )
+        Spacer(Modifier.height(8.dp))
+        PureSegmentedControl(
+            options = listOf(
+                -1 to stringResource(R.string.override_global),
+                0 to stringResource(R.string.override_off),
+                1 to stringResource(R.string.override_on)
+            ),
+            selected = silenceTriState,
+            onSelect = { choice ->
+                when (choice) {
+                    -1 -> onSetSilenceModeOverride(SilenceOverride.INHERIT)
+                    0 -> onSetSilenceModeOverride(SilenceOverride.OFF)
+                    1 -> {
+                        val next = if (normSilenceOv in SilenceOverride.SOFT..SilenceOverride.STRONG) {
+                            normSilenceOv
+                        } else {
+                            SilenceOverride.fromEnabledAndIntensity(true, globalSettings.defaultSilenceIntensity)
+                        }
+                        onSetSilenceModeOverride(next)
+                    }
+                }
+            }
+        )
+        if (silenceTriState == 1) {
+            Spacer(Modifier.height(10.dp))
+            PureSegmentedControl(
+                options = listOf(
+                    SilenceOverride.SOFT to stringResource(R.string.silence_soft),
+                    SilenceOverride.MEDIUM to stringResource(R.string.silence_medium),
+                    SilenceOverride.STRONG to stringResource(R.string.silence_strong)
+                ),
+                selected = normSilenceOv.coerceIn(SilenceOverride.SOFT, SilenceOverride.STRONG),
+                onSelect = onSetSilenceModeOverride
+            )
+        }
+
+        SectionDivider()
+
+        // 3. Volume Normalization (Global | Off | On)
+        val normNormOv = AudioOverride.normalize(book.audioNormalizationOverride)
+        OverrideHeader(
+            title = stringResource(R.string.settings_audio_normalization),
+            globalLabel = if (normNormOv == AudioOverride.INHERIT) {
+                stringResource(if (globalSettings.audioNormalizationEnabled) R.string.override_on else R.string.override_off)
+            } else null
+        )
         Spacer(Modifier.height(8.dp))
         PureSegmentedControl(
             options = listOf(
@@ -312,36 +378,23 @@ private fun AudiobookAudioSettingsSection(
                 AudioOverride.OFF to stringResource(R.string.override_off),
                 AudioOverride.ON to stringResource(R.string.override_on)
             ),
-            selected = AudioOverride.normalize(book.audioNormalizationOverride),
+            selected = normNormOv,
             onSelect = onSetNormalizationOverride
         )
 
         SectionDivider()
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.settings_mono_audio),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium
-            )
-            if (book.monoModeOverride == AudioMonoMode.INHERIT) {
-                Text(
-                    text = stringResource(R.string.override_global_state, monoModeLabel(globalSettings.monoMode)),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        Spacer(Modifier.height(8.dp))
+        // 4. Mono Audio (Global | Off | On -> L+R/Smart/L/R)
         val monoTriState = when (AudioMonoMode.normalizeOverride(book.monoModeOverride)) {
             AudioMonoMode.INHERIT -> -1
             AudioMonoMode.OFF -> 0
             else -> 1
         }
+        OverrideHeader(
+            title = stringResource(R.string.settings_mono_audio),
+            globalLabel = if (monoTriState == -1) monoModeLabel(globalSettings.monoMode) else null
+        )
+        Spacer(Modifier.height(8.dp))
         PureSegmentedControl(
             options = listOf(
                 -1 to stringResource(R.string.override_global),
@@ -374,30 +427,86 @@ private fun AudiobookAudioSettingsSection(
             )
         }
 
-        val speedDiffers = abs(book.playbackSpeed - globalSettings.defaultPlaybackSpeed) >= 0.01f
-        val silenceDiffers = book.skipSilence != globalSettings.defaultSkipSilence ||
-            (book.skipSilence && book.silenceIntensity.coerceIn(0, 2) != globalSettings.defaultSilenceIntensity.coerceIn(0, 2))
+        SectionDivider()
+
+        // 5. Smart Rewind (Global | Off | On -> 5s/10s/15s/30s)
+        val normRewindOv = SmartRewindOverride.normalize(book.smartRewindOverride)
+        val rewindTriState = when {
+            normRewindOv == SmartRewindOverride.INHERIT -> -1
+            normRewindOv == SmartRewindOverride.OFF -> 0
+            else -> 1
+        }
+        val globalRewindText = if (globalSettings.smartRewindSeconds <= 0) {
+            stringResource(R.string.override_off)
+        } else {
+            stringResource(R.string.seconds_short, globalSettings.smartRewindSeconds)
+        }
+        OverrideHeader(
+            title = stringResource(R.string.settings_smart_rewind),
+            globalLabel = if (rewindTriState == -1) globalRewindText else null
+        )
+        Spacer(Modifier.height(8.dp))
+        PureSegmentedControl(
+            options = listOf(
+                -1 to stringResource(R.string.override_global),
+                0 to stringResource(R.string.override_off),
+                1 to stringResource(R.string.override_on)
+            ),
+            selected = rewindTriState,
+            onSelect = { choice ->
+                when (choice) {
+                    -1 -> onSetSmartRewindOverride(SmartRewindOverride.INHERIT)
+                    0 -> onSetSmartRewindOverride(SmartRewindOverride.OFF)
+                    1 -> {
+                        val nextSecs = if (normRewindOv > 0) normRewindOv
+                        else globalSettings.smartRewindSeconds.takeIf { it > 0 } ?: 10
+                        onSetSmartRewindOverride(nextSecs)
+                    }
+                }
+            }
+        )
+        if (rewindTriState == 1) {
+            Spacer(Modifier.height(10.dp))
+            PureSegmentedControl(
+                options = listOf(
+                    5 to stringResource(R.string.seconds_short, 5),
+                    10 to stringResource(R.string.seconds_short, 10),
+                    15 to stringResource(R.string.seconds_short, 15),
+                    30 to stringResource(R.string.seconds_short, 30)
+                ),
+                selected = normRewindOv,
+                onSelect = onSetSmartRewindOverride
+            )
+        }
+
+        // Contextual "Apply to all audiobooks" banner across all 5 audio settings
+        val (effSilence, effIntensity) = SilenceOverride.resolve(
+            globalEnabled = globalSettings.defaultSkipSilence,
+            globalIntensity = globalSettings.defaultSilenceIntensity,
+            bookOverride = book.silenceModeOverride
+        )
         val effNorm = AudioOverride.resolve(globalSettings.audioNormalizationEnabled, book.audioNormalizationOverride)
-        val normDiffers = effNorm != globalSettings.audioNormalizationEnabled
         val effMono = AudioMonoMode.resolveEffective(globalSettings.monoMode, book.monoModeOverride, AudioMonoMode.INHERIT)
+        val effRewind = SmartRewindOverride.resolve(globalSettings.smartRewindSeconds, book.smartRewindOverride)
+
+        val speedDiffers = abs(effectiveSpeed - globalSettings.defaultPlaybackSpeed) >= 0.01f
+        val silenceDiffers = effSilence != globalSettings.defaultSkipSilence ||
+            (effSilence && effIntensity != globalSettings.defaultSilenceIntensity.coerceIn(0, 2))
+        val normDiffers = effNorm != globalSettings.audioNormalizationEnabled
         val monoDiffers = effMono != AudioMonoMode.normalizeConcrete(globalSettings.monoMode)
+        val rewindDiffers = effRewind != globalSettings.smartRewindSeconds
 
         val diffLabels = buildList {
-            if (speedDiffers) add(Formatters.formatPlaybackSpeed(book.playbackSpeed))
-            if (silenceDiffers) {
-                add(
-                    if (!book.skipSilence) stringResource(R.string.off)
-                    else stringResource(
-                        when (book.silenceIntensity.coerceIn(0, 2)) {
-                            0 -> R.string.silence_soft
-                            1 -> R.string.silence_medium
-                            else -> R.string.silence_strong
-                        }
-                    )
-                )
-            }
+            if (speedDiffers) add(Formatters.formatPlaybackSpeed(effectiveSpeed))
+            if (silenceDiffers) add(if (!effSilence) stringResource(R.string.off) else silenceIntensityLabel(effIntensity))
             if (normDiffers) add(stringResource(R.string.settings_audio_normalization))
             if (monoDiffers) add(monoModeLabel(effMono))
+            if (rewindDiffers) {
+                add(
+                    if (effRewind <= 0) stringResource(R.string.off)
+                    else stringResource(R.string.seconds_short, effRewind)
+                )
+            }
         }
 
         if (diffLabels.isNotEmpty()) {
@@ -427,6 +536,40 @@ private fun AudiobookAudioSettingsSection(
         }
     }
 }
+
+@Composable
+private fun OverrideHeader(
+    title: String,
+    globalLabel: String?
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
+        if (globalLabel != null) {
+            Text(
+                text = stringResource(R.string.override_global_state, globalLabel),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun silenceIntensityLabel(intensity: Int): String = stringResource(
+    when (intensity.coerceIn(0, 2)) {
+        0 -> R.string.silence_soft
+        1 -> R.string.silence_medium
+        else -> R.string.silence_strong
+    }
+)
 
 @Composable
 fun AudiobookStatusActionsCard(

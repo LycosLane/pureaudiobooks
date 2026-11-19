@@ -3,6 +3,9 @@ package com.lycoslane.pureaudiobooks.domain.repository
 import android.content.Context
 import com.lycoslane.pureaudiobooks.core.audio.AudioMonoMode
 import com.lycoslane.pureaudiobooks.core.audio.AudioOverride
+import com.lycoslane.pureaudiobooks.core.audio.SilenceOverride
+import com.lycoslane.pureaudiobooks.core.audio.SmartRewindOverride
+import com.lycoslane.pureaudiobooks.core.audio.SpeedOverride
 import com.lycoslane.pureaudiobooks.core.database.AudiobookEntity
 import com.lycoslane.pureaudiobooks.core.database.AudiobookWithTracks
 import com.lycoslane.pureaudiobooks.core.database.BookmarkEntity
@@ -163,9 +166,12 @@ class AudiobookRepository(
 
     suspend fun applyAudioSettingsToAllBooks(book: AudiobookEntity) = withContext(Dispatchers.IO) {
         val global = preferences.settings.value
-        val speed = book.playbackSpeed.coerceIn(0.50f, 3.00f)
-        val skipSilence = book.skipSilence
-        val silenceIntensity = book.silenceIntensity.coerceIn(0, 2)
+        val speed = SpeedOverride.resolve(global.defaultPlaybackSpeed, book.speedOverride)
+        val (skipSilence, silenceIntensity) = SilenceOverride.resolve(
+            globalEnabled = global.defaultSkipSilence,
+            globalIntensity = global.defaultSilenceIntensity,
+            bookOverride = book.silenceModeOverride
+        )
         val effectiveMono = AudioMonoMode.resolveEffective(
             globalMonoMode = global.monoMode,
             bookMonoOverride = book.monoModeOverride,
@@ -175,11 +181,16 @@ class AudiobookRepository(
             globalEnabled = global.audioNormalizationEnabled,
             bookOverride = book.audioNormalizationOverride
         )
+        val effectiveRewind = SmartRewindOverride.resolve(
+            globalSeconds = global.smartRewindSeconds,
+            bookOverride = book.smartRewindOverride
+        )
 
         preferences.setDefaultPlaybackSpeed(speed)
         preferences.setDefaultSilenceMode(skipSilence, silenceIntensity)
         preferences.setMonoMode(effectiveMono)
         preferences.setAudioNormalizationEnabled(effectiveNorm)
+        preferences.setSmartRewindSeconds(effectiveRewind)
 
         dao.applyAudioSettingsToAllBooks(
             speed = speed,
@@ -215,10 +226,13 @@ class AudiobookRepository(
                     description = book.description,
                     artworkUrl = book.artworkUrl,
                     playbackSpeed = book.playbackSpeed,
+                    speedOverride = book.speedOverride,
                     skipSilence = book.skipSilence,
                     silenceIntensity = book.silenceIntensity,
+                    silenceModeOverride = book.silenceModeOverride,
                     monoModeOverride = book.monoModeOverride,
                     audioNormalizationOverride = book.audioNormalizationOverride,
+                    smartRewindOverride = book.smartRewindOverride,
                     hasTagConflict = false,
                     conflictSummaryJson = "",
                     metadataLockedByUser = true,

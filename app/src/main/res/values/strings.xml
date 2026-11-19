@@ -116,6 +116,8 @@
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_accent_color">Accent color</string>
+    <string name="settings_text_size">Text size</string>
+    <string name="settings_text_size_hint">Pinch with two fingers anywhere</string>
     <string name="accent_amber">Amber</string>
     <string name="accent_teal">Ocean</string>
     <string name="accent_indigo">Indigo</string>
@@ -194,9 +196,11 @@
     <string name="chapter_delete_confirm_ro">This will remove chapters 1-%1$d from the app. Your local audio files will remain untouched (read-only access).</string>
     <string name="chapter_delete_all_warning">Warning: All chapters of this audiobook are selected, so the audiobook entry will be removed.</string>
     <string name="override_global">Global</string>
+    <string name="override_custom">Custom</string>
     <string name="override_off">Off</string>
     <string name="override_on">On</string>
     <string name="override_global_state">Global: %1$s</string>
+    <string name="reset_to_global">Global</string>
 
     <string name="player_audio_fix_title">Stereo / Mono-Fix</string>
     <string name="player_scope_chapter">This chapter</string>
@@ -214,6 +218,7 @@
     <string name="applied_to_all_audiobooks">Applied to all audiobooks</string>
 
     <string name="cover_fullscreen_title">Cover artwork</string>
+    <string name="cover_zoom_reset">Reset</string>
     <string name="search_online_alternatives">Search online for alternatives</string>
     <string name="choose_cover_from_gallery">Choose cover from gallery</string>
     <string name="cover_updated">Cover updated</string>

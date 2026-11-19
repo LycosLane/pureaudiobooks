@@ -48,7 +48,9 @@ import androidx.compose.ui.unit.dp
 import com.lycoslane.pureaudiobooks.R
 import com.lycoslane.pureaudiobooks.core.database.AudiobookEntity
 import com.lycoslane.pureaudiobooks.core.local.ConflictSummary
+import com.lycoslane.pureaudiobooks.ui.common.pinchToZoomTextScale
 import com.lycoslane.pureaudiobooks.core.network.OnlineBookMatch
+import com.lycoslane.pureaudiobooks.ui.common.pinchToZoomTextScale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -56,6 +58,8 @@ fun MetadataResolverSheet(
     book: AudiobookEntity,
     coverFocusMode: Boolean,
     onlineLookupEnabled: Boolean,
+    textScale: Float,
+    onTextScaleChange: (Float) -> Unit,
     onlineResults: List<OnlineBookMatch>,
     isSearchingOnline: Boolean,
     onEnableOnlineLookup: (String) -> Unit,
@@ -130,6 +134,10 @@ fun MetadataResolverSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .pinchToZoomTextScale(
+                    textScale = textScale,
+                    onTextScaleChange = onTextScaleChange
+                )
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 24.dp)

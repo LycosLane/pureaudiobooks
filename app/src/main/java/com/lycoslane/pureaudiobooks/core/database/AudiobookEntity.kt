@@ -5,6 +5,9 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.lycoslane.pureaudiobooks.core.audio.AudioMonoMode
 import com.lycoslane.pureaudiobooks.core.audio.AudioOverride
+import com.lycoslane.pureaudiobooks.core.audio.SilenceOverride
+import com.lycoslane.pureaudiobooks.core.audio.SmartRewindOverride
+import com.lycoslane.pureaudiobooks.core.audio.SpeedOverride
 
 @Entity(
     tableName = "audiobooks",
@@ -27,10 +30,13 @@ data class AudiobookEntity(
     val description: String = "",
     val artworkUrl: String = "",
     val playbackSpeed: Float = 1.0f,
+    val speedOverride: Float = SpeedOverride.INHERIT,
     val skipSilence: Boolean = false,
     val silenceIntensity: Int = 1,
+    val silenceModeOverride: Int = SilenceOverride.INHERIT,
     val monoModeOverride: Int = AudioMonoMode.INHERIT,
     val audioNormalizationOverride: Int = AudioOverride.INHERIT,
+    val smartRewindOverride: Int = SmartRewindOverride.INHERIT,
     val hasTagConflict: Boolean = false,
     val conflictSummaryJson: String = "",
     val metadataLockedByUser: Boolean = false,

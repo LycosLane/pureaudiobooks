@@ -122,8 +122,20 @@ class BookDetailViewModel(
         app.playerController.setBookPlaybackSpeed(audiobookId, speed)
     }
 
+    fun setBookSpeedOverride(speedOverride: Float) {
+        app.playerController.setBookSpeedOverride(audiobookId, speedOverride)
+    }
+
     fun setSkipSilence(enabled: Boolean, intensity: Int) {
         app.playerController.setBookSilenceMode(audiobookId, enabled, intensity)
+    }
+
+    fun setBookSilenceOverride(silenceModeOverride: Int) {
+        app.playerController.setBookSilenceOverride(audiobookId, silenceModeOverride)
+    }
+
+    fun setBookSmartRewindOverride(smartRewindOverride: Int) {
+        app.playerController.setBookSmartRewindOverride(audiobookId, smartRewindOverride)
     }
 
     fun setTrackMonoOverride(trackId: Long, mode: Int) {

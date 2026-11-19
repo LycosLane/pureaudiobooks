@@ -55,6 +55,8 @@ import androidx.compose.ui.unit.dp
 import com.lycoslane.pureaudiobooks.R
 import com.lycoslane.pureaudiobooks.core.audio.AudioMonoMode
 import com.lycoslane.pureaudiobooks.core.audio.PlayerState
+import com.lycoslane.pureaudiobooks.core.audio.SilenceOverride
+import com.lycoslane.pureaudiobooks.core.audio.SpeedOverride
 import com.lycoslane.pureaudiobooks.core.database.AudiobookWithTracks
 import com.lycoslane.pureaudiobooks.core.database.BookmarkEntity
 import com.lycoslane.pureaudiobooks.core.database.ChapterTrackEntity
@@ -90,9 +92,13 @@ fun BookDetailScreen(
     onSkipTrack: (Boolean) -> Unit,
     onSpeedChange: (Float) -> Unit,
     onSilenceChange: (Boolean, Int) -> Unit,
+    onSetBookSpeedOverride: (Float) -> Unit,
+    onSetBookSilenceOverride: (Int) -> Unit,
     onSetTrackMonoOverride: (Long, Int) -> Unit,
     onSetBookMonoOverride: (Int) -> Unit,
     onSetBookNormalizationOverride: (Int) -> Unit,
+    onSetBookSmartRewindOverride: (Int) -> Unit,
+    onTextScaleChange: (Float) -> Unit,
     onApplyToAllAudiobooks: () -> Unit,
     onSleepMinutes: (Int) -> Unit,
     onSleepEndOfTrack: (Boolean) -> Unit,
@@ -172,9 +178,25 @@ fun BookDetailScreen(
         )
     }
     val currentTrack = tracks.getOrNull(progress.currentTrackIndex)
-    val currentSpeed = if (isThisBookActive) playerState.playbackSpeed else (book?.playbackSpeed ?: 1.0f)
-    val currentSilence = if (isThisBookActive) playerState.skipSilence else (book?.skipSilence ?: false)
-    val currentSilenceIntensity = if (isThisBookActive) playerState.silenceIntensity else (book?.silenceIntensity ?: 1)
+    val currentSpeed = when {
+        isThisBookActive -> playerState.playbackSpeed
+        book != null -> SpeedOverride.resolve(globalSettings.defaultPlaybackSpeed, book.speedOverride)
+        else -> globalSettings.defaultPlaybackSpeed
+    }
+    val hasBookSpeedOverride = book != null && !SpeedOverride.isInherit(book.speedOverride)
+    val resolvedSilence = if (book != null) {
+        SilenceOverride.resolve(
+            globalSettings.defaultSkipSilence,
+            globalSettings.defaultSilenceIntensity,
+            book.silenceModeOverride
+        )
+    } else {
+        globalSettings.defaultSkipSilence to globalSettings.defaultSilenceIntensity
+    }
+    val currentSilence = if (isThisBookActive) playerState.skipSilence else resolvedSilence.first
+    val currentSilenceIntensity = if (isThisBookActive) playerState.silenceIntensity else resolvedSilence.second
+    val hasBookSilenceOverride =
+        book != null && SilenceOverride.normalize(book.silenceModeOverride) != SilenceOverride.INHERIT
     val currentTrackMonoOverride = currentTrack?.monoModeOverride ?: AudioMonoMode.INHERIT
     val currentEffectiveMono = if (isThisBookActive) {
         playerState.effectiveMonoMode
@@ -223,8 +245,10 @@ fun BookDetailScreen(
                     isThisBookActive = isThisBookActive,
                     isThisBookPlaying = isThisBookPlaying,
                     currentSpeed = currentSpeed,
+                    hasBookSpeedOverride = hasBookSpeedOverride,
                     currentSilence = currentSilence,
                     currentSilenceIntensity = currentSilenceIntensity,
+                    hasBookSilenceOverride = hasBookSilenceOverride,
                     globalMonoMode = globalSettings.monoMode,
                     currentTrackMonoOverride = currentTrackMonoOverride,
                     currentEffectiveMono = currentEffectiveMono,
@@ -239,7 +263,9 @@ fun BookDetailScreen(
                     onSeekBy = onSeekBy,
                     onSkipTrack = onSkipTrack,
                     onSpeedChange = onSpeedChange,
+                    onResetSpeedToGlobal = { onSetBookSpeedOverride(SpeedOverride.INHERIT) },
                     onSilenceChange = onSilenceChange,
+                    onResetSilenceToGlobal = { onSetBookSilenceOverride(SilenceOverride.INHERIT) },
                     onSetTrackMonoOverride = onSetTrackMonoOverride,
                     onSetBookMonoOverride = onSetBookMonoOverride,
                     onSleepMinutes = onSleepMinutes,
@@ -512,10 +538,12 @@ fun BookDetailScreen(
             globalSettings = globalSettings,
             progressFraction = progress.fraction,
             onDismiss = { showBookSettingsSheet = false },
-            onSetSpeed = onSpeedChange,
-            onSetSilenceMode = onSilenceChange,
+            onSetSpeedOverride = onSetBookSpeedOverride,
+            onSetSilenceModeOverride = onSetBookSilenceOverride,
             onSetMonoModeOverride = onSetBookMonoOverride,
             onSetNormalizationOverride = onSetBookNormalizationOverride,
+            onSetSmartRewindOverride = onSetBookSmartRewindOverride,
+            onTextScaleChange = onTextScaleChange,
             onSetHidden = { hidden ->
                 showBookSettingsSheet = false
                 onSetHidden(hidden)
@@ -543,6 +571,8 @@ fun BookDetailScreen(
             book = book,
             coverFocusMode = metadataCoverFocusMode,
             onlineLookupEnabled = globalSettings.onlineLookupEnabled,
+            textScale = globalSettings.textScale,
+            onTextScaleChange = onTextScaleChange,
             onlineResults = onlineResults,
             isSearchingOnline = isSearchingOnline,
             onEnableOnlineLookup = onEnableOnlineLookup,

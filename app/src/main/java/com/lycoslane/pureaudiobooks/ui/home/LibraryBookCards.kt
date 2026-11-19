@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lycoslane.pureaudiobooks.R
+import com.lycoslane.pureaudiobooks.core.audio.SpeedOverride
 import com.lycoslane.pureaudiobooks.core.database.AudiobookWithTracks
 import com.lycoslane.pureaudiobooks.ui.common.BookCoverImage
 import com.lycoslane.pureaudiobooks.ui.common.Formatters
@@ -84,6 +85,7 @@ fun LibrarySectionHeader(
 @Composable
 fun InProgressBookListCard(
     item: AudiobookWithTracks,
+    defaultPlaybackSpeed: Float,
     activeTrackId: Long?,
     activePositionMs: Long,
     isPlaying: Boolean,
@@ -100,12 +102,13 @@ fun InProgressBookListCard(
         fallbackTrackId = book.lastTrackId
     )
     val isThisPlaying = isPlaying && activeTrackId != null && sortedTracks.any { it.id == activeTrackId }
-    val effectiveRemaining = Formatters.effectiveDurationMs(summary.remainingMs, book.playbackSpeed)
-    val remainingLabel = if (Formatters.hasCustomSpeed(book.playbackSpeed)) {
+    val effectiveSpeed = SpeedOverride.resolve(defaultPlaybackSpeed, book.speedOverride)
+    val effectiveRemaining = Formatters.effectiveDurationMs(summary.remainingMs, effectiveSpeed)
+    val remainingLabel = if (Formatters.hasCustomSpeed(effectiveSpeed)) {
         stringResource(
             R.string.remaining_time_at_speed,
             Formatters.formatCompactHoursMinutes(effectiveRemaining),
-            Formatters.formatPlaybackSpeed(book.playbackSpeed)
+            Formatters.formatPlaybackSpeed(effectiveSpeed)
         )
     } else {
         stringResource(
@@ -219,6 +222,7 @@ fun InProgressBookListCard(
 @Composable
 fun InProgressBookGridCard(
     item: AudiobookWithTracks,
+    defaultPlaybackSpeed: Float,
     activeTrackId: Long?,
     activePositionMs: Long,
     isPlaying: Boolean,
@@ -235,7 +239,8 @@ fun InProgressBookGridCard(
         fallbackTrackId = book.lastTrackId
     )
     val isThisPlaying = isPlaying && activeTrackId != null && sortedTracks.any { it.id == activeTrackId }
-    val effectiveRemaining = Formatters.effectiveDurationMs(summary.remainingMs, book.playbackSpeed)
+    val effectiveSpeed = SpeedOverride.resolve(defaultPlaybackSpeed, book.speedOverride)
+    val effectiveRemaining = Formatters.effectiveDurationMs(summary.remainingMs, effectiveSpeed)
 
     Surface(
         shape = RoundedCornerShape(14.dp),

@@ -40,6 +40,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -71,8 +72,11 @@ import com.lycoslane.pureaudiobooks.core.preferences.AppPreferences
 import com.lycoslane.pureaudiobooks.core.preferences.AppSettings
 import com.lycoslane.pureaudiobooks.ui.common.MonoModeSelector
 import com.lycoslane.pureaudiobooks.ui.common.PureSegmentedControl
+import com.lycoslane.pureaudiobooks.ui.player.SpeedControlPanel
 import com.lycoslane.pureaudiobooks.ui.theme.PureAccent
 import com.lycoslane.pureaudiobooks.ui.theme.isDarkThemeEffective
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,6 +86,9 @@ fun SettingsScreen(
     onChangeThemeMode: (String) -> Unit,
     onChangeLightAccent: (String) -> Unit,
     onChangeDarkAccent: (String) -> Unit,
+    onResetTextScale: () -> Unit,
+    onChangeDefaultSpeed: (Float) -> Unit,
+    onChangeDefaultSilenceMode: (Boolean, Int) -> Unit,
     onToggleAudioNormalization: (Boolean) -> Unit,
     onChangeMonoMode: (Int) -> Unit,
     onChangeSmartRewind: (Int) -> Unit,
@@ -226,10 +233,68 @@ fun SettingsScreen(
                         }
                     }
                 }
+                SectionDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_text_size),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = stringResource(R.string.settings_text_size_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "${(settings.textScale * 100f).roundToInt()}%",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        if (abs(settings.textScale - 1.0f) >= 0.02f) {
+                            TextButton(onClick = onResetTextScale) {
+                                Text(stringResource(R.string.action_reset))
+                            }
+                        }
+                    }
+                }
             }
 
             // 2. Playback
             SettingsSection(title = stringResource(R.string.settings_playback_section)) {
+                SpeedControlPanel(
+                    targetId = 0L,
+                    currentSpeed = settings.defaultPlaybackSpeed,
+                    onSetSpeed = onChangeDefaultSpeed
+                )
+                SectionDivider()
+                SettingSwitchRow(
+                    title = stringResource(R.string.skip_silence),
+                    checked = settings.defaultSkipSilence,
+                    onCheckedChange = { enabled ->
+                        onChangeDefaultSilenceMode(enabled, settings.defaultSilenceIntensity)
+                    }
+                )
+                if (settings.defaultSkipSilence) {
+                    Spacer(Modifier.height(8.dp))
+                    PureSegmentedControl(
+                        options = listOf(
+                            0 to stringResource(R.string.silence_soft),
+                            1 to stringResource(R.string.silence_medium),
+                            2 to stringResource(R.string.silence_strong)
+                        ),
+                        selected = settings.defaultSilenceIntensity.coerceIn(0, 2),
+                        onSelect = { onChangeDefaultSilenceMode(true, it) }
+                    )
+                }
+                SectionDivider()
                 SettingSwitchRow(
                     title = stringResource(R.string.settings_audio_normalization),
                     checked = settings.audioNormalizationEnabled,

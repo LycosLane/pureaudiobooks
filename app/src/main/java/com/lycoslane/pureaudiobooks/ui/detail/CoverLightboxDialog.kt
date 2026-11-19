@@ -1,18 +1,19 @@
 package com.lycoslane.pureaudiobooks.ui.detail
 
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,21 +28,31 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.lycoslane.pureaudiobooks.R
 import com.lycoslane.pureaudiobooks.ui.common.BookCoverImage
+import kotlin.math.roundToInt
 
 @Composable
 fun CoverLightboxDialog(
@@ -52,21 +63,26 @@ fun CoverLightboxDialog(
     onSearchOnlineAlternatives: () -> Unit,
     onPickCoverFromGallery: () -> Unit
 ) {
+    var scale by remember(artworkUrl) { mutableFloatStateOf(1f) }
+    var offsetX by remember(artworkUrl) { mutableFloatStateOf(0f) }
+    var offsetY by remember(artworkUrl) { mutableFloatStateOf(0f) }
+
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = Color.Black.copy(alpha = 0.92f)
+            color = Color.Black.copy(alpha = 0.94f)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.SpaceBetween,
+                    .safeDrawingPadding()
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
@@ -76,64 +92,124 @@ fun CoverLightboxDialog(
                 ) {
                     Text(
                         text = stringResource(R.string.cover_fullscreen_title),
-                        style = MaterialTheme.typography.titleSmall,
-                        color = Color.White.copy(alpha = 0.8f)
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White.copy(alpha = 0.85f)
                     )
-                    Surface(
-                        shape = CircleShape,
-                        color = Color.White.copy(alpha = 0.14f)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        IconButton(onClick = onDismiss) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = stringResource(R.string.close),
-                                tint = Color.White
-                            )
+                        if (scale > 1.02f) {
+                            TextButton(
+                                onClick = {
+                                    scale = 1f
+                                    offsetX = 0f
+                                    offsetY = 0f
+                                }
+                            ) {
+                                Text(
+                                    text = "${(scale * 100f).roundToInt()}% - ${stringResource(R.string.cover_zoom_reset)}",
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.White.copy(alpha = 0.14f)
+                        ) {
+                            IconButton(onClick = onDismiss) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = stringResource(R.string.close),
+                                    tint = Color.White
+                                )
+                            }
                         }
                     }
                 }
 
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
                 ) {
+                    val coverSize = min(maxWidth - 8.dp, maxHeight - 8.dp).coerceAtLeast(120.dp)
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(0.86f)
-                            .aspectRatio(1f)
-                            .clip(RoundedCornerShape(20.dp)),
+                            .size(coverSize)
+                            .clip(RoundedCornerShape(20.dp))
+                            .clipToBounds()
+                            .pointerInput(coverSize) {
+                                detectTapGestures(
+                                    onDoubleTap = {
+                                        if (scale > 1.05f) {
+                                            scale = 1f
+                                            offsetX = 0f
+                                            offsetY = 0f
+                                        } else {
+                                            scale = 2.4f
+                                        }
+                                    }
+                                )
+                            }
+                            .pointerInput(coverSize) {
+                                detectTransformGestures { _, pan, zoom, _ ->
+                                    val nextScale = (scale * zoom).coerceIn(1f, 4f)
+                                    scale = nextScale
+                                    if (nextScale <= 1.02f) {
+                                        offsetX = 0f
+                                        offsetY = 0f
+                                    } else {
+                                        val maxOffsetX = (size.width * (nextScale - 1f)) / 2f
+                                        val maxOffsetY = (size.height * (nextScale - 1f)) / 2f
+                                        offsetX = (offsetX + pan.x).coerceIn(-maxOffsetX, maxOffsetX)
+                                        offsetY = (offsetY + pan.y).coerceIn(-maxOffsetY, maxOffsetY)
+                                    }
+                                }
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         BookCoverImage(
                             url = artworkUrl,
                             contentDescription = title,
                             contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (author.isNotBlank()) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = author,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.75f),
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            maxDecodeSizePx = 1024,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    scaleX = scale
+                                    scaleY = scale
+                                    translationX = offsetX
+                                    translationY = offsetY
+                                }
                         )
                     }
                 }
 
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (author.isNotBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = author,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.White.copy(alpha = 0.88f),
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(Modifier.height(14.dp))
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(10.dp)

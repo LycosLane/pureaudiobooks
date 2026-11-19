@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ChapterTrackEntity::class,
         BookmarkEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class PureAudiobooksDatabase : RoomDatabase() {
@@ -44,6 +44,16 @@ abstract class PureAudiobooksDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE audiobooks ADD COLUMN speedOverride REAL NOT NULL DEFAULT -1.0")
+                db.execSQL("ALTER TABLE audiobooks ADD COLUMN silenceModeOverride INTEGER NOT NULL DEFAULT -1")
+                db.execSQL("ALTER TABLE audiobooks ADD COLUMN smartRewindOverride INTEGER NOT NULL DEFAULT -1")
+                db.execSQL("UPDATE audiobooks SET speedOverride = playbackSpeed WHERE ABS(playbackSpeed - 1.0) >= 0.01")
+                db.execSQL("UPDATE audiobooks SET silenceModeOverride = CASE WHEN skipSilence != 0 THEN (MIN(MAX(silenceIntensity, 0), 2) + 1) ELSE -1 END")
+            }
+        }
+
         fun getInstance(context: Context): PureAudiobooksDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -51,7 +61,7 @@ abstract class PureAudiobooksDatabase : RoomDatabase() {
                     PureAudiobooksDatabase::class.java,
                     "pureaudiobooks.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                     .also { INSTANCE = it }
             }

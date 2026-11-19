@@ -38,6 +38,26 @@ class MonoMixAudioProcessorTest {
     }
 
     @Test
+    fun resolvesSpeedSilenceAndSmartRewindOverrides() {
+        assertTrue(SpeedOverride.isInherit(SpeedOverride.INHERIT))
+        assertTrue(SpeedOverride.isInherit(Float.NaN))
+        assertFalse(SpeedOverride.isInherit(1.25f))
+        assertEquals(3.00f, SpeedOverride.normalize(4.5f), 0.001f)
+        assertEquals(1.30f, SpeedOverride.resolve(1.30f, SpeedOverride.INHERIT), 0.001f)
+        assertEquals(1.75f, SpeedOverride.resolve(1.30f, 1.75f), 0.001f)
+
+        assertEquals(SilenceOverride.OFF, SilenceOverride.fromEnabledAndIntensity(false, 2))
+        assertEquals(SilenceOverride.MEDIUM, SilenceOverride.fromEnabledAndIntensity(true, 1))
+        assertEquals(true to 2, SilenceOverride.resolve(true, 2, SilenceOverride.INHERIT))
+        assertEquals(false to 1, SilenceOverride.resolve(true, 2, SilenceOverride.OFF))
+        assertEquals(true to 2, SilenceOverride.resolve(false, 0, SilenceOverride.STRONG))
+
+        assertEquals(10, SmartRewindOverride.resolve(10, SmartRewindOverride.INHERIT))
+        assertEquals(0, SmartRewindOverride.resolve(10, SmartRewindOverride.OFF))
+        assertEquals(30, SmartRewindOverride.resolve(10, 30))
+    }
+
+    @Test
     fun processesOffMixLeftAndRightModesAccurately() {
         val processor = MonoMixAudioProcessor()
 

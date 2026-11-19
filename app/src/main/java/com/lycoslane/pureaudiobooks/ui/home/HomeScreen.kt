@@ -87,10 +87,12 @@ fun HomeScreen(
     onOpenBook: (Long) -> Unit,
     onOpenBookMetadata: (Long) -> Unit,
     onPlayBook: (AudiobookWithTracks) -> Unit,
-    onSetBookSpeed: (Long, Float) -> Unit,
-    onSetBookSilence: (Long, Boolean, Int) -> Unit,
+    onSetBookSpeedOverride: (Long, Float) -> Unit,
+    onSetBookSilenceModeOverride: (Long, Int) -> Unit,
     onSetBookMonoOverride: (Long, Int) -> Unit,
     onSetBookNormalizationOverride: (Long, Int) -> Unit,
+    onSetBookSmartRewindOverride: (Long, Int) -> Unit,
+    onTextScaleChange: (Float) -> Unit,
     onApplyBookAudioToAll: (AudiobookEntity) -> Unit,
     onMarkFinished: (Long, Boolean) -> Unit,
     onResetProgress: (Long) -> Unit,
@@ -343,6 +345,7 @@ fun HomeScreen(
                                 items(inProgressBooks, key = { "prog_${it.audiobook.id}" }) { item ->
                                     InProgressBookGridCard(
                                         item = item,
+                                        defaultPlaybackSpeed = globalSettings.defaultPlaybackSpeed,
                                         activeTrackId = activeTrackId,
                                         activePositionMs = activePositionMs,
                                         isPlaying = isPlaying,
@@ -386,6 +389,7 @@ fun HomeScreen(
                                 items(inProgressBooks, key = { "prog_${it.audiobook.id}" }) { item ->
                                     InProgressBookListCard(
                                         item = item,
+                                        defaultPlaybackSpeed = globalSettings.defaultPlaybackSpeed,
                                         activeTrackId = activeTrackId,
                                         activePositionMs = activePositionMs,
                                         isPlaying = isPlaying,
@@ -527,10 +531,12 @@ fun HomeScreen(
             progressFraction = targetProgress.fraction,
             startInQuickMode = true,
             onDismiss = { bookMenuTarget = null },
-            onSetSpeed = { speed -> onSetBookSpeed(book.id, speed) },
-            onSetSilenceMode = { enabled, intensity -> onSetBookSilence(book.id, enabled, intensity) },
+            onSetSpeedOverride = { speedOv -> onSetBookSpeedOverride(book.id, speedOv) },
+            onSetSilenceModeOverride = { silOv -> onSetBookSilenceModeOverride(book.id, silOv) },
             onSetMonoModeOverride = { mode -> onSetBookMonoOverride(book.id, mode) },
             onSetNormalizationOverride = { ov -> onSetBookNormalizationOverride(book.id, ov) },
+            onSetSmartRewindOverride = { rwOv -> onSetBookSmartRewindOverride(book.id, rwOv) },
+            onTextScaleChange = onTextScaleChange,
             onSetHidden = { hidden ->
                 bookMenuTarget = null
                 onSetHidden(book.id, hidden)

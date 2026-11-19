@@ -99,7 +99,7 @@ fun PlayerActionTile(
         color = containerColor,
         border = border,
         modifier = modifier
-            .height(58.dp)
+            .defaultMinSize(minHeight = 58.dp)
             .clip(RoundedCornerShape(12.dp))
             .semantics {
                 role = Role.Button
@@ -113,8 +113,8 @@ fun PlayerActionTile(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 4.dp),
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -199,8 +199,10 @@ fun PlayerPrimaryControlsBar(
     bookId: Long,
     trackId: Long,
     playbackSpeed: Float,
+    hasBookSpeedOverride: Boolean = false,
     skipSilence: Boolean,
     silenceIntensity: Int,
+    hasBookSilenceOverride: Boolean = false,
     globalMonoMode: Int,
     bookMonoOverride: Int,
     trackMonoOverride: Int,
@@ -213,7 +215,9 @@ fun PlayerPrimaryControlsBar(
     panelAboveTiles: Boolean = false,
     onTogglePanel: (PlayerControlPanel) -> Unit,
     onSetSpeed: (Float) -> Unit,
+    onResetSpeedToGlobal: (() -> Unit)? = null,
     onSetSilenceMode: (Boolean, Int) -> Unit,
+    onResetSilenceToGlobal: (() -> Unit)? = null,
     onSetTrackMonoOverride: (Int) -> Unit,
     onSetBookMonoOverride: (Int) -> Unit,
     onSetSleepMinutes: (Int) -> Unit,
@@ -251,12 +255,14 @@ fun PlayerPrimaryControlsBar(
                             targetId = bookId,
                             currentSpeed = playbackSpeed,
                             remainingRawMs = remainingRawMs,
-                            onSetSpeed = onSetSpeed
+                            onSetSpeed = onSetSpeed,
+                            onResetToGlobal = if (hasBookSpeedOverride) onResetSpeedToGlobal else null
                         )
                         PlayerControlPanel.SILENCE -> SilenceControlPanel(
                             skipSilence = skipSilence,
                             silenceIntensity = silenceIntensity,
-                            onSetSilenceMode = onSetSilenceMode
+                            onSetSilenceMode = onSetSilenceMode,
+                            onResetToGlobal = if (hasBookSilenceOverride) onResetSilenceToGlobal else null
                         )
                         PlayerControlPanel.AUDIO_FIX -> AudioFixControlPanel(
                             trackId = trackId,
@@ -337,7 +343,8 @@ fun SpeedControlPanel(
     targetId: Long,
     currentSpeed: Float,
     onSetSpeed: (Float) -> Unit,
-    remainingRawMs: Long? = null
+    remainingRawMs: Long? = null,
+    onResetToGlobal: (() -> Unit)? = null
 ) {
     var sliderSpeed by remember(targetId, currentSpeed) {
         mutableFloatStateOf(currentSpeed.coerceIn(0.50f, 3.00f))
@@ -349,11 +356,24 @@ fun SpeedControlPanel(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = stringResource(R.string.player_speed_title),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.player_speed_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (onResetToGlobal != null) {
+                    TextButton(
+                        onClick = onResetToGlobal,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.reset_to_global),
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
             if (remainingRawMs != null && remainingRawMs > 0L) {
                 val effRemaining = Formatters.effectiveDurationMs(remainingRawMs, sliderSpeed)
                 Text(
@@ -460,7 +480,8 @@ fun SpeedControlPanel(
 fun SilenceControlPanel(
     skipSilence: Boolean,
     silenceIntensity: Int,
-    onSetSilenceMode: (Boolean, Int) -> Unit
+    onSetSilenceMode: (Boolean, Int) -> Unit,
+    onResetToGlobal: (() -> Unit)? = null
 ) {
     val selectedOption = if (skipSilence) silenceIntensity.coerceIn(0, 2) else -1
     val statusText = when (selectedOption) {
@@ -474,11 +495,24 @@ fun SilenceControlPanel(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = stringResource(R.string.skip_silence),
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.SemiBold
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.skip_silence),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            if (onResetToGlobal != null) {
+                TextButton(
+                    onClick = onResetToGlobal,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.reset_to_global),
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+        }
         Text(
             text = statusText,
             style = MaterialTheme.typography.labelMedium,

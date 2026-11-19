@@ -6,6 +6,9 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.lycoslane.pureaudiobooks.core.audio.AudioMonoMode
 import com.lycoslane.pureaudiobooks.core.audio.AudioOverride
+import com.lycoslane.pureaudiobooks.core.audio.SilenceOverride
+import com.lycoslane.pureaudiobooks.core.audio.SmartRewindOverride
+import com.lycoslane.pureaudiobooks.core.audio.SpeedOverride
 import com.lycoslane.pureaudiobooks.core.database.AudiobookEntity
 import com.lycoslane.pureaudiobooks.core.database.BookmarkEntity
 import com.lycoslane.pureaudiobooks.core.database.ChapterTrackEntity
@@ -162,10 +165,13 @@ class AudiobookRepositoryTest {
                 folderName = "B1",
                 title = "B1",
                 playbackSpeed = 1.44f,
+                speedOverride = 1.44f,
                 skipSilence = true,
                 silenceIntensity = 2,
+                silenceModeOverride = SilenceOverride.STRONG,
                 monoModeOverride = AudioMonoMode.AUTO,
-                audioNormalizationOverride = AudioOverride.ON
+                audioNormalizationOverride = AudioOverride.ON,
+                smartRewindOverride = 15
             )
         )
         val book2Id = dao.insertAudiobook(
@@ -173,11 +179,14 @@ class AudiobookRepositoryTest {
                 folderKey = "local://b2",
                 folderName = "B2",
                 title = "B2",
-                playbackSpeed = 1.0f,
+                playbackSpeed = 0.85f,
+                speedOverride = 0.85f,
                 skipSilence = false,
                 silenceIntensity = 0,
+                silenceModeOverride = SilenceOverride.OFF,
                 monoModeOverride = AudioMonoMode.LEFT,
-                audioNormalizationOverride = AudioOverride.OFF
+                audioNormalizationOverride = AudioOverride.OFF,
+                smartRewindOverride = 30
             )
         )
 
@@ -190,6 +199,7 @@ class AudiobookRepositoryTest {
         assertEquals(2, savedSettings.defaultSilenceIntensity)
         assertEquals(AudioMonoMode.AUTO, savedSettings.monoMode)
         assertTrue(savedSettings.audioNormalizationEnabled)
+        assertEquals(15, savedSettings.smartRewindSeconds)
 
         val b1After = dao.getAudiobook(book1Id)!!
         val b2After = dao.getAudiobook(book2Id)!!
@@ -197,8 +207,11 @@ class AudiobookRepositoryTest {
             assertEquals(1.44f, book.playbackSpeed, 0.001f)
             assertTrue(book.skipSilence)
             assertEquals(2, book.silenceIntensity)
+            assertEquals(SpeedOverride.INHERIT, book.speedOverride, 0.001f)
+            assertEquals(SilenceOverride.INHERIT, book.silenceModeOverride)
             assertEquals(AudioMonoMode.INHERIT, book.monoModeOverride)
             assertEquals(AudioOverride.INHERIT, book.audioNormalizationOverride)
+            assertEquals(SmartRewindOverride.INHERIT, book.smartRewindOverride)
         }
     }
 

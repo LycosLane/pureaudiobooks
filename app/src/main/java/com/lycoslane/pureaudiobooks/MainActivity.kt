@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lycoslane.pureaudiobooks.core.preferences.LocaleHelper
 import com.lycoslane.pureaudiobooks.ui.PureAudiobooksApp
+import com.lycoslane.pureaudiobooks.ui.common.GlobalTextZoomHost
 import com.lycoslane.pureaudiobooks.ui.theme.PureAudiobooksTheme
 
 class MainActivity : ComponentActivity() {
@@ -50,7 +51,12 @@ class MainActivity : ComponentActivity() {
                 lightAccentId = settings.lightAccent,
                 darkAccentId = settings.darkAccent
             ) {
-                PureAudiobooksApp(app)
+                GlobalTextZoomHost(
+                    textScale = settings.textScale,
+                    onTextScaleChange = { app.preferences.setTextScale(it) }
+                ) {
+                    PureAudiobooksApp(app)
+                }
             }
         }
     }

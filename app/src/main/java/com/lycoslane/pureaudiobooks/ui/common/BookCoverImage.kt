@@ -67,32 +67,38 @@ private object NativeBookImageCache {
         override fun sizeOf(key: String, value: ImageBitmap): Int = value.width * value.height * 4
     }
 
-    fun getCached(url: String): ImageBitmap? = if (url.isBlank()) null else memoryCache.get(url)
+    fun getCached(url: String, maxDecodeSizePx: Int = 512): ImageBitmap? =
+        if (url.isBlank()) null else memoryCache.get(cacheKey(url, maxDecodeSizePx))
 
     fun invalidate(url: String) {
         if (url.isNotBlank()) {
-            memoryCache.remove(url)
+            memoryCache.remove(cacheKey(url, 512))
+            memoryCache.remove(cacheKey(url, 1024))
         }
     }
 
-    suspend fun load(context: Context, url: String): ImageBitmap? {
-        if (url.isBlank()) return null
-        memoryCache.get(url)?.let { return it }
+    private fun cacheKey(url: String, maxDecodeSizePx: Int): String = "$url@$maxDecodeSizePx"
 
-        val deferred = inFlight.computeIfAbsent(url) {
+    suspend fun load(context: Context, url: String, maxDecodeSizePx: Int = 512): ImageBitmap? {
+        if (url.isBlank()) return null
+        val key = cacheKey(url, maxDecodeSizePx)
+        memoryCache.get(key)?.let { return it }
+
+        val deferred = inFlight.computeIfAbsent(key) {
             cacheScope.async {
                 try {
-                    loadInternal(context.applicationContext, url)
+                    loadInternal(context.applicationContext, url, maxDecodeSizePx)
                 } finally {
-                    inFlight.remove(url)
+                    inFlight.remove(key)
                 }
             }
         }
         return deferred.await()
     }
 
-    private fun loadInternal(appContext: Context, url: String): ImageBitmap? {
-        memoryCache.get(url)?.let { return it }
+    private fun loadInternal(appContext: Context, url: String, maxDecodeSizePx: Int): ImageBitmap? {
+        val key = cacheKey(url, maxDecodeSizePx)
+        memoryCache.get(key)?.let { return it }
 
         if (url.startsWith("content://")) {
             val uri = Uri.parse(url)
@@ -102,14 +108,14 @@ private object NativeBookImageCache {
                     BitmapFactory.decodeStream(it, null, opts)
                 }
                 if (opts.outWidth <= 0 || opts.outHeight <= 0) return@runCatching null
-                opts.inSampleSize = calculateInSampleSize(opts.outWidth, opts.outHeight, 512, 512)
+                opts.inSampleSize = calculateInSampleSize(opts.outWidth, opts.outHeight, maxDecodeSizePx, maxDecodeSizePx)
                 opts.inJustDecodeBounds = false
                 appContext.contentResolver.openInputStream(uri)?.use {
                     BitmapFactory.decodeStream(it, null, opts)
                 }
             }.getOrNull() ?: return null
             val imageBitmap = bitmap.asImageBitmap()
-            memoryCache.put(url, imageBitmap)
+            memoryCache.put(key, imageBitmap)
             return imageBitmap
         }
 
@@ -125,9 +131,9 @@ private object NativeBookImageCache {
                 allowedRoots.any { canonical.startsWith("$it/") }
             }.getOrDefault(false)
             if (!allowed || !file.exists()) return null
-            val bitmap = decodeSampledFile(file) ?: return null
+            val bitmap = decodeSampledFile(file, maxDecodeSizePx) ?: return null
             val imageBitmap = bitmap.asImageBitmap()
-            memoryCache.put(url, imageBitmap)
+            memoryCache.put(key, imageBitmap)
             return imageBitmap
         }
 
@@ -135,16 +141,16 @@ private object NativeBookImageCache {
         val cacheDir = File(appContext.cacheDir, "artwork_preview").apply { mkdirs() }
         val file = File(cacheDir, sha256(url))
         val bitmap = if (file.exists() && file.length() > 0L) {
-            decodeSampledFile(file)
+            decodeSampledFile(file, maxDecodeSizePx)
         } else {
-            downloadPreview(url, file)
+            downloadPreview(url, file, maxDecodeSizePx)
         } ?: return null
         val imageBitmap = bitmap.asImageBitmap()
-        memoryCache.put(url, imageBitmap)
+        memoryCache.put(key, imageBitmap)
         return imageBitmap
     }
 
-    private fun downloadPreview(url: String, target: File): android.graphics.Bitmap? {
+    private fun downloadPreview(url: String, target: File, maxDecodeSizePx: Int): android.graphics.Bitmap? {
         var conn: HttpURLConnection? = null
         return try {
             conn = NetworkSecurity.openValidatedConnection(url, connectTimeoutMs = 8_000, readTimeoutMs = 10_000)
@@ -152,7 +158,7 @@ private object NativeBookImageCache {
             BoundedInputStream(conn.inputStream, MAX_IMAGE_BYTES).use { input ->
                 target.outputStream().use { out -> input.copyTo(out) }
             }
-            decodeSampledFile(target)
+            decodeSampledFile(target, maxDecodeSizePx)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -163,11 +169,11 @@ private object NativeBookImageCache {
         }
     }
 
-    private fun decodeSampledFile(file: File): android.graphics.Bitmap? {
+    private fun decodeSampledFile(file: File, maxDecodeSizePx: Int): android.graphics.Bitmap? {
         val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, opts)
         if (opts.outWidth <= 0 || opts.outHeight <= 0) return null
-        opts.inSampleSize = calculateInSampleSize(opts.outWidth, opts.outHeight, 512, 512)
+        opts.inSampleSize = calculateInSampleSize(opts.outWidth, opts.outHeight, maxDecodeSizePx, maxDecodeSizePx)
         opts.inJustDecodeBounds = false
         return BitmapFactory.decodeFile(file.absolutePath, opts)
     }
@@ -195,14 +201,17 @@ fun BookCoverImage(
     url: String,
     contentDescription: String?,
     modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Crop
+    contentScale: ContentScale = ContentScale.Crop,
+    maxDecodeSizePx: Int = 512
 ) {
     val context = LocalContext.current
     val cacheVersion by BookCoverCache.version.collectAsState()
-    var imageBitmap by remember(url, cacheVersion) { mutableStateOf(NativeBookImageCache.getCached(url)) }
+    var imageBitmap by remember(url, maxDecodeSizePx, cacheVersion) {
+        mutableStateOf(NativeBookImageCache.getCached(url, maxDecodeSizePx))
+    }
 
-    LaunchedEffect(url, cacheVersion) {
-        imageBitmap = NativeBookImageCache.load(context, url)
+    LaunchedEffect(url, maxDecodeSizePx, cacheVersion) {
+        imageBitmap = NativeBookImageCache.load(context, url, maxDecodeSizePx)
     }
 
     val bmp = imageBitmap

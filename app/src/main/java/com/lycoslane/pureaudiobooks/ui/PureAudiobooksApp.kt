@@ -176,14 +176,20 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                         navController.navigate("detail/$bookId?openMetadata=true") { launchSingleTop = true }
                     },
                     onPlayBook = { item -> libraryViewModel.playOrToggleBook(item) },
-                    onSetBookSpeed = { bookId, speed -> libraryViewModel.setBookPlaybackSpeed(bookId, speed) },
-                    onSetBookSilence = { bookId, enabled, intensity ->
-                        libraryViewModel.setBookSilenceMode(bookId, enabled, intensity)
+                    onSetBookSpeedOverride = { bookId, speedOv ->
+                        libraryViewModel.setBookSpeedOverride(bookId, speedOv)
+                    },
+                    onSetBookSilenceModeOverride = { bookId, silOv ->
+                        libraryViewModel.setBookSilenceOverride(bookId, silOv)
                     },
                     onSetBookMonoOverride = { bookId, mode -> libraryViewModel.setBookMonoOverride(bookId, mode) },
                     onSetBookNormalizationOverride = { bookId, ov ->
                         libraryViewModel.setBookNormalizationOverride(bookId, ov)
                     },
+                    onSetBookSmartRewindOverride = { bookId, rwOv ->
+                        libraryViewModel.setBookSmartRewindOverride(bookId, rwOv)
+                    },
+                    onTextScaleChange = { scale -> libraryViewModel.preferences.setTextScale(scale) },
                     onApplyBookAudioToAll = { book ->
                         libraryViewModel.applyBookAudioSettingsToAll(book) {
                             scope.launch {
@@ -222,6 +228,11 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     onChangeThemeMode = { libraryViewModel.preferences.setThemeMode(it) },
                     onChangeLightAccent = { libraryViewModel.preferences.setLightAccent(it) },
                     onChangeDarkAccent = { libraryViewModel.preferences.setDarkAccent(it) },
+                    onResetTextScale = { libraryViewModel.preferences.setTextScale(1.0f) },
+                    onChangeDefaultSpeed = { libraryViewModel.preferences.setDefaultPlaybackSpeed(it) },
+                    onChangeDefaultSilenceMode = { enabled, intensity ->
+                        libraryViewModel.preferences.setDefaultSilenceMode(enabled, intensity)
+                    },
                     onToggleAudioNormalization = { libraryViewModel.preferences.setAudioNormalizationEnabled(it) },
                     onChangeMonoMode = { libraryViewModel.preferences.setMonoMode(it) },
                     onChangeSmartRewind = { libraryViewModel.preferences.setSmartRewindSeconds(it) },
@@ -289,9 +300,13 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     onSkipTrack = { app.playerController.skipTrack(it) },
                     onSpeedChange = { detailViewModel.setPlaybackSpeed(it) },
                     onSilenceChange = { enabled, intensity -> detailViewModel.setSkipSilence(enabled, intensity) },
+                    onSetBookSpeedOverride = { speedOv -> detailViewModel.setBookSpeedOverride(speedOv) },
+                    onSetBookSilenceOverride = { silOv -> detailViewModel.setBookSilenceOverride(silOv) },
                     onSetTrackMonoOverride = { trackId, mode -> detailViewModel.setTrackMonoOverride(trackId, mode) },
                     onSetBookMonoOverride = { mode -> detailViewModel.setBookMonoOverride(mode) },
                     onSetBookNormalizationOverride = { ov -> detailViewModel.setBookNormalizationOverride(ov) },
+                    onSetBookSmartRewindOverride = { rwOv -> detailViewModel.setBookSmartRewindOverride(rwOv) },
+                    onTextScaleChange = { scale -> libraryViewModel.preferences.setTextScale(scale) },
                     onApplyToAllAudiobooks = {
                         detailViewModel.applyAudioSettingsToAll {
                             scope.launch {

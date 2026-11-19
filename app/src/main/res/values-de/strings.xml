@@ -116,6 +116,8 @@
     <string name="settings_theme_light">Hell</string>
     <string name="settings_theme_dark">Dunkel</string>
     <string name="settings_accent_color">Akzentfarbe</string>
+    <string name="settings_text_size">Textgröße</string>
+    <string name="settings_text_size_hint">Überall mit zwei Fingern zoomen</string>
     <string name="accent_amber">Bernstein</string>
     <string name="accent_teal">Ozean</string>
     <string name="accent_indigo">Indigo</string>
@@ -194,9 +196,11 @@
     <string name="chapter_delete_confirm_ro">Dadurch werden Kapitel 1-%1$d aus der App entfernt. Die lokalen Audiodateien bleiben unverändert (nur Lesezugriff).</string>
     <string name="chapter_delete_all_warning">Hinweis: Es sind alle Kapitel dieses Hörbuchs ausgewählt, daher wird der Hörbuch-Eintrag entfernt.</string>
     <string name="override_global">Global</string>
+    <string name="override_custom">Lokal</string>
     <string name="override_off">Aus</string>
     <string name="override_on">An</string>
     <string name="override_global_state">Global: %1$s</string>
+    <string name="reset_to_global">Global</string>
 
     <string name="player_audio_fix_title">Stereo / Mono-Fix</string>
     <string name="player_scope_chapter">Dieses Kapitel</string>
@@ -214,6 +218,7 @@
     <string name="applied_to_all_audiobooks">Für alle Hörbücher übernommen</string>
 
     <string name="cover_fullscreen_title">Coverbild</string>
+    <string name="cover_zoom_reset">Zurücksetzen</string>
     <string name="search_online_alternatives">Online nach Alternativen suchen</string>
     <string name="choose_cover_from_gallery">Cover aus Galerie wählen</string>
     <string name="cover_updated">Cover aktualisiert</string>

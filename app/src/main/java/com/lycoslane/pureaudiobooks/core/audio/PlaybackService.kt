@@ -64,6 +64,9 @@ class PlaybackService : MediaSessionService() {
     @Volatile
     private var sleepAtEndOfTrack: Boolean = false
 
+    @Volatile
+    private var currentEffectiveSmartRewindSeconds: Int = 10
+
     @OptIn(UnstableApi::class)
     private lateinit var monoProcessor: MonoMixAudioProcessor
 
@@ -104,9 +107,19 @@ class PlaybackService : MediaSessionService() {
             .build()
 
         val app = applicationContext as PureAudiobooksApplication
+        currentEffectiveSmartRewindSeconds = app.preferences.settings.value.smartRewindSeconds
         serviceScope.launch {
             app.preferences.settings
-                .map { it.audioNormalizationEnabled to it.monoMode }
+                .map { s ->
+                    listOf(
+                        s.defaultPlaybackSpeed,
+                        s.defaultSkipSilence,
+                        s.defaultSilenceIntensity,
+                        s.audioNormalizationEnabled,
+                        s.monoMode,
+                        s.smartRewindSeconds
+                    )
+                }
                 .distinctUntilChanged()
                 .collect { resolveAndApplyCurrentAudioSettings() }
         }
@@ -147,7 +160,7 @@ class PlaybackService : MediaSessionService() {
                 if (!player.playWhenReady && player.playbackState != STATE_ENDED && lastPausedElapsedMs > 0L) {
                     val pausedDuration = SystemClock.elapsedRealtime() - lastPausedElapsedMs
                     lastPausedElapsedMs = 0L
-                    val rewindSecs = app.preferences.settings.value.smartRewindSeconds
+                    val rewindSecs = currentEffectiveSmartRewindSeconds
                     if (rewindSecs > 0 && pausedDuration >= 30_000L) {
                         val target = (player.currentPosition - rewindSecs * 1000L).coerceAtLeast(0L)
                         player.seekTo(target)
@@ -289,6 +302,15 @@ class PlaybackService : MediaSessionService() {
                                 future.setException(UnsupportedOperationException("Nothing to resume"))
                             } else {
                                 val globalSettings = app.preferences.settings.value
+                                val effectiveSpeed = SpeedOverride.resolve(
+                                    globalSpeed = globalSettings.defaultPlaybackSpeed,
+                                    bookOverride = withBook.audiobook.speedOverride
+                                )
+                                val (effectiveSkipSilence, effectiveIntensity) = SilenceOverride.resolve(
+                                    globalEnabled = globalSettings.defaultSkipSilence,
+                                    globalIntensity = globalSettings.defaultSilenceIntensity,
+                                    bookOverride = withBook.audiobook.silenceModeOverride
+                                )
                                 val effectiveMono = AudioMonoMode.resolveEffective(
                                     globalMonoMode = globalSettings.monoMode,
                                     bookMonoOverride = withBook.audiobook.monoModeOverride,
@@ -298,14 +320,13 @@ class PlaybackService : MediaSessionService() {
                                     globalEnabled = globalSettings.audioNormalizationEnabled,
                                     bookOverride = withBook.audiobook.audioNormalizationOverride
                                 )
+                                currentEffectiveSmartRewindSeconds = SmartRewindOverride.resolve(
+                                    globalSeconds = globalSettings.smartRewindSeconds,
+                                    bookOverride = withBook.audiobook.smartRewindOverride
+                                )
                                 withContext(Dispatchers.Main) {
-                                    player.playbackParameters = PlaybackParameters(
-                                        withBook.audiobook.playbackSpeed.coerceIn(0.50f, 3.00f)
-                                    )
-                                    updateSilenceProcessors(
-                                        withBook.audiobook.skipSilence,
-                                        withBook.audiobook.silenceIntensity
-                                    )
+                                    player.playbackParameters = PlaybackParameters(effectiveSpeed)
+                                    updateSilenceProcessors(effectiveSkipSilence, effectiveIntensity)
                                     monoProcessor.setMode(effectiveMono)
                                     currentEffectiveNormalization = effectiveNorm
                                     applyAudioNormalization(effectiveNorm)
@@ -360,6 +381,11 @@ class PlaybackService : MediaSessionService() {
                                 sleepAtEndOfTrack = args.getBoolean(ARG_SLEEP_END_OF_TRACK, false)
                                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
+                            CMD_SET_SMART_REWIND -> {
+                                currentEffectiveSmartRewindSeconds =
+                                    args.getInt(ARG_SMART_REWIND_SECONDS, 10).coerceIn(0, 120)
+                                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                            }
                         }
                     }
                     return super.onCustomCommand(session, controller, customCommand, args)
@@ -378,8 +404,11 @@ class PlaybackService : MediaSessionService() {
         val global = app.preferences.settings.value
         val trackId = player.currentMediaItem?.mediaId?.toLongOrNull()
         if (trackId == null) {
+            player.playbackParameters = PlaybackParameters(global.defaultPlaybackSpeed.coerceIn(0.50f, 3.00f))
+            updateSilenceProcessors(global.defaultSkipSilence, global.defaultSilenceIntensity)
             monoProcessor.setMode(global.monoMode)
             currentEffectiveNormalization = global.audioNormalizationEnabled
+            currentEffectiveSmartRewindSeconds = global.smartRewindSeconds
             applyAudioNormalization(currentEffectiveNormalization)
             return
         }
@@ -389,6 +418,20 @@ class PlaybackService : MediaSessionService() {
             }
             if (player.currentMediaItem?.mediaId?.toLongOrNull() != trackId) return@launch
             val currentGlobal = app.preferences.settings.value
+            val effectiveSpeed = if (pair != null) {
+                SpeedOverride.resolve(currentGlobal.defaultPlaybackSpeed, pair.audiobook.speedOverride)
+            } else {
+                currentGlobal.defaultPlaybackSpeed.coerceIn(0.50f, 3.00f)
+            }
+            val (effectiveSilence, effectiveIntensity) = if (pair != null) {
+                SilenceOverride.resolve(
+                    globalEnabled = currentGlobal.defaultSkipSilence,
+                    globalIntensity = currentGlobal.defaultSilenceIntensity,
+                    bookOverride = pair.audiobook.silenceModeOverride
+                )
+            } else {
+                currentGlobal.defaultSkipSilence to currentGlobal.defaultSilenceIntensity.coerceIn(0, 2)
+            }
             val effectiveMono = if (pair != null) {
                 AudioMonoMode.resolveEffective(
                     globalMonoMode = currentGlobal.monoMode,
@@ -406,6 +449,13 @@ class PlaybackService : MediaSessionService() {
             } else {
                 currentGlobal.audioNormalizationEnabled
             }
+            currentEffectiveSmartRewindSeconds = if (pair != null) {
+                SmartRewindOverride.resolve(currentGlobal.smartRewindSeconds, pair.audiobook.smartRewindOverride)
+            } else {
+                currentGlobal.smartRewindSeconds
+            }
+            player.playbackParameters = PlaybackParameters(effectiveSpeed)
+            updateSilenceProcessors(effectiveSilence, effectiveIntensity)
             monoProcessor.setMode(effectiveMono)
             currentEffectiveNormalization = effectiveNorm
             applyAudioNormalization(effectiveNorm)
@@ -491,8 +541,22 @@ class PlaybackService : MediaSessionService() {
             val pair = withContext(Dispatchers.IO) { dao.getTrackWithAudiobook(trackId) } ?: return@launch
             val item = buildMediaItem(pair.track, pair.audiobook) ?: return@launch
             val globalSettings = (applicationContext as PureAudiobooksApplication).preferences.settings.value
+            val effectiveSpeed = SpeedOverride.resolve(
+                globalSpeed = globalSettings.defaultPlaybackSpeed,
+                bookOverride = pair.audiobook.speedOverride
+            )
+            val (effectiveSkipSilence, effectiveIntensity) = SilenceOverride.resolve(
+                globalEnabled = globalSettings.defaultSkipSilence,
+                globalIntensity = globalSettings.defaultSilenceIntensity,
+                bookOverride = pair.audiobook.silenceModeOverride
+            )
+            val effectiveSmartRewind = SmartRewindOverride.resolve(
+                globalSeconds = globalSettings.smartRewindSeconds,
+                bookOverride = pair.audiobook.smartRewindOverride
+            )
+            currentEffectiveSmartRewindSeconds = effectiveSmartRewind
             val rewindMs = if (resumeWithRewind && pair.track.positionMs > 0L) {
-                globalSettings.smartRewindSeconds * 1000L
+                effectiveSmartRewind * 1000L
             } else {
                 0L
             }
@@ -508,8 +572,8 @@ class PlaybackService : MediaSessionService() {
             )
             lastPausedElapsedMs = 0L
             player.setMediaItem(item, startPos)
-            player.playbackParameters = PlaybackParameters(pair.audiobook.playbackSpeed.coerceIn(0.50f, 3.00f))
-            updateSilenceProcessors(pair.audiobook.skipSilence, pair.audiobook.silenceIntensity.coerceIn(0, 2))
+            player.playbackParameters = PlaybackParameters(effectiveSpeed)
+            updateSilenceProcessors(effectiveSkipSilence, effectiveIntensity)
             monoProcessor.setMode(effectiveMono)
             currentEffectiveNormalization = effectiveNorm
             applyAudioNormalization(effectiveNorm)
@@ -632,5 +696,7 @@ class PlaybackService : MediaSessionService() {
         const val CMD_SKIP_BOOK_TRACK_PREV = "com.lycoslane.pureaudiobooks.SKIP_BOOK_TRACK_PREV"
         const val CMD_SET_SLEEP_END_OF_TRACK = "com.lycoslane.pureaudiobooks.SET_SLEEP_END_OF_TRACK"
         const val ARG_SLEEP_END_OF_TRACK = "sleep_end_of_track"
+        const val CMD_SET_SMART_REWIND = "com.lycoslane.pureaudiobooks.SET_SMART_REWIND"
+        const val ARG_SMART_REWIND_SECONDS = "smart_rewind_seconds"
     }
 }

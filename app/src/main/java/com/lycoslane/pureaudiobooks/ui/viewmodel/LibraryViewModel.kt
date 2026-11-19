@@ -95,8 +95,20 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         app.playerController.setBookPlaybackSpeed(bookId, speed)
     }
 
+    fun setBookSpeedOverride(bookId: Long, speedOverride: Float) {
+        app.playerController.setBookSpeedOverride(bookId, speedOverride)
+    }
+
     fun setBookSilenceMode(bookId: Long, enabled: Boolean, intensity: Int) {
         app.playerController.setBookSilenceMode(bookId, enabled, intensity)
+    }
+
+    fun setBookSilenceOverride(bookId: Long, silenceModeOverride: Int) {
+        app.playerController.setBookSilenceOverride(bookId, silenceModeOverride)
+    }
+
+    fun setBookSmartRewindOverride(bookId: Long, smartRewindOverride: Int) {
+        app.playerController.setBookSmartRewindOverride(bookId, smartRewindOverride)
     }
 
     fun setBookMonoOverride(bookId: Long, mode: Int) {

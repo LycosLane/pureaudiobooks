@@ -18,6 +18,7 @@ import com.lycoslane.pureaudiobooks.core.database.AudiobookEntity
 import com.lycoslane.pureaudiobooks.core.database.ChapterTrackEntity
 import com.lycoslane.pureaudiobooks.core.database.PureAudiobooksDao
 import com.lycoslane.pureaudiobooks.core.preferences.AppPreferences
+import com.lycoslane.pureaudiobooks.core.preferences.AppSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -76,7 +77,16 @@ class PlayerController(
     init {
         scope.launch {
             preferences.settings
-                .map { it.monoMode to it.audioNormalizationEnabled }
+                .map { s ->
+                    listOf(
+                        s.defaultPlaybackSpeed,
+                        s.defaultSkipSilence,
+                        s.defaultSilenceIntensity,
+                        s.audioNormalizationEnabled,
+                        s.monoMode,
+                        s.smartRewindSeconds
+                    )
+                }
                 .distinctUntilChanged()
                 .collect { refreshEffectiveAudioSettings() }
         }
@@ -181,16 +191,7 @@ class PlayerController(
             val sortedTracks = sortTracks(dao.getTracksForAudiobook(book.id))
             if (sortedTracks.isEmpty()) return@launch
             val idx = sortedTracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
-            val global = preferences.settings.value
-            val effectiveMono = AudioMonoMode.resolveEffective(
-                globalMonoMode = global.monoMode,
-                bookMonoOverride = book.monoModeOverride,
-                trackMonoOverride = track.monoModeOverride
-            )
-            val effectiveNorm = AudioOverride.resolve(
-                globalEnabled = global.audioNormalizationEnabled,
-                bookOverride = book.audioNormalizationOverride
-            )
+            val resolved = resolveAudio(preferences.settings.value, book, track.monoModeOverride)
             _state.update { st ->
                 if (st.currentTrack != null) {
                     st
@@ -204,14 +205,14 @@ class PlayerController(
                         isPlaying = false,
                         positionMs = track.positionMs.coerceAtLeast(0L),
                         durationMs = track.durationMs.coerceAtLeast(0L),
-                        playbackSpeed = book.playbackSpeed.coerceIn(0.50f, 3.00f),
-                        skipSilence = book.skipSilence,
-                        silenceIntensity = book.silenceIntensity.coerceIn(0, 2),
+                        playbackSpeed = resolved.speed,
+                        skipSilence = resolved.skipSilence,
+                        silenceIntensity = resolved.silenceIntensity,
                         bookMonoOverride = book.monoModeOverride,
                         trackMonoOverride = track.monoModeOverride,
-                        effectiveMonoMode = effectiveMono,
+                        effectiveMonoMode = resolved.monoMode,
                         bookNormalizationOverride = book.audioNormalizationOverride,
-                        effectiveAudioNormalization = effectiveNorm
+                        effectiveAudioNormalization = resolved.normalization
                     )
                 }
             }
@@ -241,15 +242,10 @@ class PlayerController(
                 val pair = dao.getTrackWithAudiobook(trackId) ?: return@launch
                 val allTracks = sortTracks(dao.getTracksForAudiobook(pair.audiobook.id))
                 val idx = allTracks.indexOfFirst { it.id == trackId }.coerceAtLeast(0)
-                val global = preferences.settings.value
-                val effectiveMono = AudioMonoMode.resolveEffective(
-                    globalMonoMode = global.monoMode,
-                    bookMonoOverride = pair.audiobook.monoModeOverride,
-                    trackMonoOverride = pair.track.monoModeOverride
-                )
-                val effectiveNorm = AudioOverride.resolve(
-                    globalEnabled = global.audioNormalizationEnabled,
-                    bookOverride = pair.audiobook.audioNormalizationOverride
+                val resolved = resolveAudio(
+                    preferences.settings.value,
+                    pair.audiobook,
+                    pair.track.monoModeOverride
                 )
                 _state.update {
                     it.copy(
@@ -258,21 +254,20 @@ class PlayerController(
                         bookTracks = allTracks,
                         totalBookTracks = allTracks.size,
                         currentTrackIndex = idx,
-                        playbackSpeed = pair.audiobook.playbackSpeed.coerceIn(0.50f, 3.00f),
-                        skipSilence = pair.audiobook.skipSilence,
-                        silenceIntensity = pair.audiobook.silenceIntensity.coerceIn(0, 2),
+                        playbackSpeed = resolved.speed,
+                        skipSilence = resolved.skipSilence,
+                        silenceIntensity = resolved.silenceIntensity,
                         bookMonoOverride = pair.audiobook.monoModeOverride,
                         trackMonoOverride = pair.track.monoModeOverride,
-                        effectiveMonoMode = effectiveMono,
+                        effectiveMonoMode = resolved.monoMode,
                         bookNormalizationOverride = pair.audiobook.audioNormalizationOverride,
-                        effectiveAudioNormalization = effectiveNorm
+                        effectiveAudioNormalization = resolved.normalization
                     )
                 }
                 withContext(Dispatchers.Main) {
                     val mc = mediaController
                     if (mc != null && mc.isConnected && mc.currentMediaItem?.mediaId == trackId.toString()) {
-                        sendMonoModeCommand(mc, effectiveMono)
-                        sendAudioNormalizationCommand(mc, effectiveNorm)
+                        pushAudioToController(mc, resolved)
                     }
                 }
             }
@@ -355,9 +350,9 @@ class PlayerController(
             .setMediaMetadata(metadata)
             .build()
 
-        val global = preferences.settings.value
+        val resolved = resolveAudio(preferences.settings.value, book, targetTrack.monoModeOverride)
         val rewindMs = if (targetTrack.positionMs > 0L) {
-            global.smartRewindSeconds * 1000L
+            resolved.smartRewindSeconds * 1000L
         } else {
             0L
         }
@@ -367,17 +362,6 @@ class PlayerController(
             else -> 0L
         }
         val idx = sortedTracks.indexOfFirst { it.id == targetTrack.id }.coerceAtLeast(0)
-        val speed = book.playbackSpeed.coerceIn(0.50f, 3.00f)
-        val intensity = book.silenceIntensity.coerceIn(0, 2)
-        val effectiveMono = AudioMonoMode.resolveEffective(
-            globalMonoMode = global.monoMode,
-            bookMonoOverride = book.monoModeOverride,
-            trackMonoOverride = targetTrack.monoModeOverride
-        )
-        val effectiveNorm = AudioOverride.resolve(
-            globalEnabled = global.audioNormalizationEnabled,
-            bookOverride = book.audioNormalizationOverride
-        )
 
         _state.update {
             it.copy(
@@ -388,22 +372,19 @@ class PlayerController(
                 currentTrackIndex = idx,
                 positionMs = startPos,
                 durationMs = targetTrack.durationMs,
-                playbackSpeed = speed,
-                skipSilence = book.skipSilence,
-                silenceIntensity = intensity,
+                playbackSpeed = resolved.speed,
+                skipSilence = resolved.skipSilence,
+                silenceIntensity = resolved.silenceIntensity,
                 bookMonoOverride = book.monoModeOverride,
                 trackMonoOverride = targetTrack.monoModeOverride,
-                effectiveMonoMode = effectiveMono,
+                effectiveMonoMode = resolved.monoMode,
                 bookNormalizationOverride = book.audioNormalizationOverride,
-                effectiveAudioNormalization = effectiveNorm
+                effectiveAudioNormalization = resolved.normalization
             )
         }
 
         controller.setMediaItem(mediaItem, startPos)
-        controller.playbackParameters = PlaybackParameters(speed)
-        sendSkipSilenceCommand(controller, book.skipSilence, intensity)
-        sendMonoModeCommand(controller, effectiveMono)
-        sendAudioNormalizationCommand(controller, effectiveNorm)
+        pushAudioToController(controller, resolved)
         controller.prepare()
         controller.play()
 
@@ -479,17 +460,23 @@ class PlayerController(
     }
 
     fun setBookPlaybackSpeed(bookId: Long, speed: Float) {
-        val clamped = speed.coerceIn(0.50f, 3.00f)
+        setBookSpeedOverride(bookId, speed.coerceIn(0.50f, 3.00f))
+    }
+
+    fun setBookSpeedOverride(bookId: Long, speedOverride: Float) {
+        val norm = SpeedOverride.normalize(speedOverride)
+        val global = preferences.settings.value
+        val effectiveSpeed = SpeedOverride.resolve(global.defaultPlaybackSpeed, norm)
         if (_state.value.currentBook?.id == bookId) {
-            mediaController?.playbackParameters = PlaybackParameters(clamped)
+            mediaController?.playbackParameters = PlaybackParameters(effectiveSpeed)
             _state.update { st ->
                 st.copy(
-                    playbackSpeed = clamped,
-                    currentBook = st.currentBook?.copy(playbackSpeed = clamped)
+                    playbackSpeed = effectiveSpeed,
+                    currentBook = st.currentBook?.copy(speedOverride = norm, playbackSpeed = effectiveSpeed)
                 )
             }
         }
-        scope.launch(Dispatchers.IO) { dao.updatePlaybackSpeed(bookId, clamped) }
+        scope.launch(Dispatchers.IO) { dao.setBookSpeedOverride(bookId, norm, effectiveSpeed) }
     }
 
     fun setSkipSilence(enabled: Boolean, intensity: Int) {
@@ -498,21 +485,46 @@ class PlayerController(
     }
 
     fun setBookSilenceMode(bookId: Long, enabled: Boolean, intensity: Int) {
-        val normIntensity = intensity.coerceIn(0, 2)
+        setBookSilenceOverride(bookId, SilenceOverride.fromEnabledAndIntensity(enabled, intensity))
+    }
+
+    fun setBookSilenceOverride(bookId: Long, silenceModeOverride: Int) {
+        val norm = SilenceOverride.normalize(silenceModeOverride)
+        val global = preferences.settings.value
+        val (effectiveEnabled, effectiveIntensity) = SilenceOverride.resolve(
+            globalEnabled = global.defaultSkipSilence,
+            globalIntensity = global.defaultSilenceIntensity,
+            bookOverride = norm
+        )
         if (_state.value.currentBook?.id == bookId) {
-            mediaController?.let { sendSkipSilenceCommand(it, enabled, normIntensity) }
+            mediaController?.let { sendSkipSilenceCommand(it, effectiveEnabled, effectiveIntensity) }
             _state.update { st ->
                 st.copy(
-                    skipSilence = enabled,
-                    silenceIntensity = normIntensity,
+                    skipSilence = effectiveEnabled,
+                    silenceIntensity = effectiveIntensity,
                     currentBook = st.currentBook?.copy(
-                        skipSilence = enabled,
-                        silenceIntensity = normIntensity
+                        silenceModeOverride = norm,
+                        skipSilence = effectiveEnabled,
+                        silenceIntensity = effectiveIntensity
                     )
                 )
             }
         }
-        scope.launch(Dispatchers.IO) { dao.updateSkipSilence(bookId, enabled, normIntensity) }
+        scope.launch(Dispatchers.IO) {
+            dao.setBookSilenceModeOverride(bookId, norm, effectiveEnabled, effectiveIntensity)
+        }
+    }
+
+    fun setBookSmartRewindOverride(bookId: Long, smartRewindOverride: Int) {
+        val norm = SmartRewindOverride.normalize(smartRewindOverride)
+        val effective = SmartRewindOverride.resolve(preferences.settings.value.smartRewindSeconds, norm)
+        if (_state.value.currentBook?.id == bookId) {
+            mediaController?.let { sendSmartRewindCommand(it, effective) }
+            _state.update { st ->
+                st.copy(currentBook = st.currentBook?.copy(smartRewindOverride = norm))
+            }
+        }
+        scope.launch(Dispatchers.IO) { dao.setBookSmartRewindOverride(bookId, norm) }
     }
 
     fun setTrackMonoOverride(trackId: Long, mode: Int) {
@@ -580,26 +592,40 @@ class PlayerController(
 
     fun refreshEffectiveAudioSettings() {
         val st = _state.value
-        val global = preferences.settings.value
-        val effectiveMono = AudioMonoMode.resolveEffective(
-            globalMonoMode = global.monoMode,
-            bookMonoOverride = st.currentBook?.monoModeOverride ?: st.bookMonoOverride,
-            trackMonoOverride = st.currentTrack?.monoModeOverride ?: st.trackMonoOverride
-        )
-        val effectiveNorm = AudioOverride.resolve(
-            globalEnabled = global.audioNormalizationEnabled,
-            bookOverride = st.currentBook?.audioNormalizationOverride ?: st.bookNormalizationOverride
+        val resolved = resolveAudio(
+            global = preferences.settings.value,
+            book = st.currentBook,
+            trackMonoOverride = st.currentTrack?.monoModeOverride ?: st.trackMonoOverride,
+            fallbackMonoOverride = st.bookMonoOverride,
+            fallbackNormOverride = st.bookNormalizationOverride
         )
         _state.update {
             it.copy(
-                effectiveMonoMode = effectiveMono,
-                effectiveAudioNormalization = effectiveNorm
+                playbackSpeed = resolved.speed,
+                skipSilence = resolved.skipSilence,
+                silenceIntensity = resolved.silenceIntensity,
+                effectiveMonoMode = resolved.monoMode,
+                effectiveAudioNormalization = resolved.normalization
             )
         }
         mediaController?.takeIf { it.isConnected }?.let { mc ->
-            sendMonoModeCommand(mc, effectiveMono)
-            sendAudioNormalizationCommand(mc, effectiveNorm)
+            pushAudioToController(mc, resolved)
         }
+    }
+
+    private fun pushAudioToController(mc: MediaController, resolved: ResolvedBookAudio) {
+        mc.playbackParameters = PlaybackParameters(resolved.speed)
+        sendSkipSilenceCommand(mc, resolved.skipSilence, resolved.silenceIntensity)
+        sendMonoModeCommand(mc, resolved.monoMode)
+        sendAudioNormalizationCommand(mc, resolved.normalization)
+        sendSmartRewindCommand(mc, resolved.smartRewindSeconds)
+    }
+
+    private fun sendSmartRewindCommand(mc: MediaController, seconds: Int) {
+        val args = Bundle().apply {
+            putInt(PlaybackService.ARG_SMART_REWIND_SECONDS, seconds.coerceIn(0, 120))
+        }
+        mc.sendCustomCommand(SessionCommand(PlaybackService.CMD_SET_SMART_REWIND, Bundle.EMPTY), args)
     }
 
     private fun sendMonoModeCommand(mc: MediaController, mode: Int) {
@@ -706,43 +732,81 @@ class PlayerController(
             val tracks = sortTracks(dao.getTracksForAudiobook(bookId))
             val curTrackId = _state.value.currentTrack?.id
             val updatedTrack = tracks.firstOrNull { it.id == curTrackId } ?: _state.value.currentTrack
-            val global = preferences.settings.value
-            val effectiveMono = AudioMonoMode.resolveEffective(
-                globalMonoMode = global.monoMode,
-                bookMonoOverride = updated.monoModeOverride,
+            val resolved = resolveAudio(
+                global = preferences.settings.value,
+                book = updated,
                 trackMonoOverride = updatedTrack?.monoModeOverride ?: AudioMonoMode.INHERIT
             )
-            val effectiveNorm = AudioOverride.resolve(
-                globalEnabled = global.audioNormalizationEnabled,
-                bookOverride = updated.audioNormalizationOverride
-            )
-            val clampedSpeed = updated.playbackSpeed.coerceIn(0.50f, 3.00f)
-            val normIntensity = updated.silenceIntensity.coerceIn(0, 2)
             _state.update {
                 it.copy(
                     currentBook = updated,
                     currentTrack = updatedTrack,
                     bookTracks = tracks,
                     totalBookTracks = tracks.size,
-                    playbackSpeed = clampedSpeed,
-                    skipSilence = updated.skipSilence,
-                    silenceIntensity = normIntensity,
+                    playbackSpeed = resolved.speed,
+                    skipSilence = resolved.skipSilence,
+                    silenceIntensity = resolved.silenceIntensity,
                     bookMonoOverride = updated.monoModeOverride,
                     trackMonoOverride = updatedTrack?.monoModeOverride ?: AudioMonoMode.INHERIT,
-                    effectiveMonoMode = effectiveMono,
+                    effectiveMonoMode = resolved.monoMode,
                     bookNormalizationOverride = updated.audioNormalizationOverride,
-                    effectiveAudioNormalization = effectiveNorm
+                    effectiveAudioNormalization = resolved.normalization
                 )
             }
             withContext(Dispatchers.Main) {
                 mediaController?.takeIf { it.isConnected }?.let { mc ->
-                    mc.playbackParameters = PlaybackParameters(clampedSpeed)
-                    sendSkipSilenceCommand(mc, updated.skipSilence, normIntensity)
-                    sendMonoModeCommand(mc, effectiveMono)
-                    sendAudioNormalizationCommand(mc, effectiveNorm)
+                    pushAudioToController(mc, resolved)
                 }
             }
         }
+    }
+
+    private data class ResolvedBookAudio(
+        val speed: Float,
+        val skipSilence: Boolean,
+        val silenceIntensity: Int,
+        val monoMode: Int,
+        val normalization: Boolean,
+        val smartRewindSeconds: Int
+    )
+
+    private fun resolveAudio(
+        global: AppSettings,
+        book: AudiobookEntity?,
+        trackMonoOverride: Int,
+        fallbackMonoOverride: Int = AudioMonoMode.INHERIT,
+        fallbackNormOverride: Int = AudioOverride.INHERIT
+    ): ResolvedBookAudio {
+        val speed = SpeedOverride.resolve(
+            globalSpeed = global.defaultPlaybackSpeed,
+            bookOverride = book?.speedOverride ?: SpeedOverride.INHERIT
+        )
+        val (skipSilence, silenceIntensity) = SilenceOverride.resolve(
+            globalEnabled = global.defaultSkipSilence,
+            globalIntensity = global.defaultSilenceIntensity,
+            bookOverride = book?.silenceModeOverride ?: SilenceOverride.INHERIT
+        )
+        val monoMode = AudioMonoMode.resolveEffective(
+            globalMonoMode = global.monoMode,
+            bookMonoOverride = book?.monoModeOverride ?: fallbackMonoOverride,
+            trackMonoOverride = trackMonoOverride
+        )
+        val normalization = AudioOverride.resolve(
+            globalEnabled = global.audioNormalizationEnabled,
+            bookOverride = book?.audioNormalizationOverride ?: fallbackNormOverride
+        )
+        val smartRewindSeconds = SmartRewindOverride.resolve(
+            globalSeconds = global.smartRewindSeconds,
+            bookOverride = book?.smartRewindOverride ?: SmartRewindOverride.INHERIT
+        )
+        return ResolvedBookAudio(
+            speed = speed,
+            skipSilence = skipSilence,
+            silenceIntensity = silenceIntensity,
+            monoMode = monoMode,
+            normalization = normalization,
+            smartRewindSeconds = smartRewindSeconds
+        )
     }
 
     fun refreshAfterApplyAll() {

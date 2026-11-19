@@ -2,6 +2,9 @@ package com.lycoslane.pureaudiobooks.domain.repository
 
 import com.lycoslane.pureaudiobooks.core.audio.AudioMonoMode
 import com.lycoslane.pureaudiobooks.core.audio.AudioOverride
+import com.lycoslane.pureaudiobooks.core.audio.SilenceOverride
+import com.lycoslane.pureaudiobooks.core.audio.SmartRewindOverride
+import com.lycoslane.pureaudiobooks.core.audio.SpeedOverride
 import com.lycoslane.pureaudiobooks.core.database.BookmarkEntity
 import com.lycoslane.pureaudiobooks.core.database.PureAudiobooksDao
 import com.lycoslane.pureaudiobooks.core.preferences.AppPreferences
@@ -73,10 +76,13 @@ internal class BackupManager(
                     put("author", book.author)
                     put("description", book.description)
                     put("playbackSpeed", book.playbackSpeed.toDouble())
+                    put("speedOverride", book.speedOverride.toDouble())
                     put("skipSilence", book.skipSilence)
                     put("silenceIntensity", book.silenceIntensity)
+                    put("silenceModeOverride", book.silenceModeOverride)
                     put("monoModeOverride", book.monoModeOverride)
                     put("audioNormalizationOverride", book.audioNormalizationOverride)
+                    put("smartRewindOverride", book.smartRewindOverride)
                     put("metadataLockedByUser", book.metadataLockedByUser)
                     put("isFinished", book.isFinished)
                     put("finishedAtMs", book.finishedAtMs)
@@ -132,12 +138,33 @@ internal class BackupManager(
 
             val rawSpeed = obj.optDouble("playbackSpeed", existing.playbackSpeed.toDouble())
             val safeSpeed = if (rawSpeed.isFinite()) rawSpeed.toFloat().coerceIn(0.50f, 3.00f) else existing.playbackSpeed
-            dao.updatePlaybackSpeed(existing.id, safeSpeed)
-            dao.updateSkipSilence(
-                existing.id,
-                obj.optBoolean("skipSilence", existing.skipSilence),
-                obj.optInt("silenceIntensity", existing.silenceIntensity).coerceIn(0, 2)
-            )
+            val importedSpeedOverride = if (obj.has("speedOverride")) {
+                val ov = obj.optDouble("speedOverride", SpeedOverride.INHERIT.toDouble())
+                if (ov.isFinite()) SpeedOverride.normalize(ov.toFloat()) else SpeedOverride.INHERIT
+            } else if (kotlin.math.abs(safeSpeed - 1.0f) >= 0.01f) {
+                safeSpeed
+            } else {
+                SpeedOverride.INHERIT
+            }
+            dao.setBookSpeedOverride(existing.id, importedSpeedOverride, safeSpeed)
+
+            val skipSilence = obj.optBoolean("skipSilence", existing.skipSilence)
+            val silenceIntensity = obj.optInt("silenceIntensity", existing.silenceIntensity).coerceIn(0, 2)
+            val importedSilenceOverride = if (obj.has("silenceModeOverride")) {
+                SilenceOverride.normalize(obj.optInt("silenceModeOverride", SilenceOverride.INHERIT))
+            } else if (skipSilence) {
+                SilenceOverride.fromEnabledAndIntensity(true, silenceIntensity)
+            } else {
+                SilenceOverride.INHERIT
+            }
+            dao.setBookSilenceModeOverride(existing.id, importedSilenceOverride, skipSilence, silenceIntensity)
+
+            if (obj.has("smartRewindOverride")) {
+                dao.setBookSmartRewindOverride(
+                    existing.id,
+                    SmartRewindOverride.normalize(obj.optInt("smartRewindOverride", SmartRewindOverride.INHERIT))
+                )
+            }
             if (obj.has("monoModeOverride")) {
                 dao.setBookMonoModeOverride(
                     existing.id,

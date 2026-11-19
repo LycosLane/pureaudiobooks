@@ -130,8 +130,17 @@ interface PureAudiobooksDao {
     @Query("UPDATE audiobooks SET playbackSpeed = :speed WHERE id = :audiobookId")
     suspend fun updatePlaybackSpeed(audiobookId: Long, speed: Float)
 
+    @Query("UPDATE audiobooks SET speedOverride = :speedOverride, playbackSpeed = :playbackSpeed WHERE id = :audiobookId")
+    suspend fun setBookSpeedOverride(audiobookId: Long, speedOverride: Float, playbackSpeed: Float)
+
     @Query("UPDATE audiobooks SET skipSilence = :enabled, silenceIntensity = :intensity WHERE id = :audiobookId")
     suspend fun updateSkipSilence(audiobookId: Long, enabled: Boolean, intensity: Int)
+
+    @Query("UPDATE audiobooks SET silenceModeOverride = :silenceModeOverride, skipSilence = :skipSilence, silenceIntensity = :silenceIntensity WHERE id = :audiobookId")
+    suspend fun setBookSilenceModeOverride(audiobookId: Long, silenceModeOverride: Int, skipSilence: Boolean, silenceIntensity: Int)
+
+    @Query("UPDATE audiobooks SET smartRewindOverride = :smartRewindOverride WHERE id = :audiobookId")
+    suspend fun setBookSmartRewindOverride(audiobookId: Long, smartRewindOverride: Int)
 
     @Query("UPDATE audiobooks SET monoModeOverride = :mode WHERE id = :audiobookId")
     suspend fun setBookMonoModeOverride(audiobookId: Long, mode: Int)
@@ -143,10 +152,13 @@ interface PureAudiobooksDao {
         """
         UPDATE audiobooks SET
             playbackSpeed = :speed,
+            speedOverride = -1.0,
             skipSilence = :skipSilence,
             silenceIntensity = :silenceIntensity,
+            silenceModeOverride = -1,
             monoModeOverride = :monoOverride,
-            audioNormalizationOverride = :normOverride
+            audioNormalizationOverride = :normOverride,
+            smartRewindOverride = -1
         """
     )
     suspend fun applyAudioSettingsToAllBooks(

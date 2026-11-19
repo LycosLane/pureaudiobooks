@@ -6,6 +6,9 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.lycoslane.pureaudiobooks.core.audio.AudioMonoMode
 import com.lycoslane.pureaudiobooks.core.audio.AudioOverride
+import com.lycoslane.pureaudiobooks.core.audio.SilenceOverride
+import com.lycoslane.pureaudiobooks.core.audio.SmartRewindOverride
+import com.lycoslane.pureaudiobooks.core.audio.SpeedOverride
 import com.lycoslane.pureaudiobooks.core.database.AudiobookEntity
 import com.lycoslane.pureaudiobooks.core.database.BookmarkEntity
 import com.lycoslane.pureaudiobooks.core.database.ChapterTrackEntity
@@ -54,6 +57,8 @@ class BackupManagerTest {
         preferences.setLightAccent("indigo")
         preferences.setDarkAccent("coral")
         preferences.setMonoMode(AudioMonoMode.AUTO)
+        preferences.setSmartRewindSeconds(20)
+        preferences.setTextScale(1.25f)
         preferences.setDefaultPlaybackSpeed(1.32f)
         preferences.setDefaultSilenceMode(true, 2)
         preferences.setShowRefreshButton(false)
@@ -66,10 +71,13 @@ class BackupManagerTest {
                 title = "Dune",
                 author = "Frank Herbert",
                 playbackSpeed = 1.42f,
+                speedOverride = 1.42f,
                 skipSilence = true,
                 silenceIntensity = 2,
+                silenceModeOverride = SilenceOverride.STRONG,
                 monoModeOverride = AudioMonoMode.LEFT,
                 audioNormalizationOverride = AudioOverride.ON,
+                smartRewindOverride = 15,
                 isHidden = true,
                 metadataLockedByUser = true,
                 lastPlayedAtMs = 123_456L
@@ -109,13 +117,17 @@ class BackupManagerTest {
         preferences.setLightAccent(AppPreferences.DEFAULT_ACCENT)
         preferences.setDarkAccent(AppPreferences.DEFAULT_ACCENT)
         preferences.setMonoMode(AudioMonoMode.OFF)
+        preferences.setSmartRewindSeconds(10)
+        preferences.setTextScale(1.0f)
         preferences.setDefaultPlaybackSpeed(1.0f)
         preferences.setDefaultSilenceMode(false, 1)
         preferences.setShowRefreshButton(true)
         preferences.setShowSearchBar(true)
-        dao.updatePlaybackSpeed(bookId, 1.0f)
+        dao.setBookSpeedOverride(bookId, SpeedOverride.INHERIT, 1.0f)
+        dao.setBookSilenceModeOverride(bookId, SilenceOverride.INHERIT, false, 1)
         dao.setBookMonoModeOverride(bookId, AudioMonoMode.INHERIT)
         dao.setBookAudioNormalizationOverride(bookId, AudioOverride.INHERIT)
+        dao.setBookSmartRewindOverride(bookId, SmartRewindOverride.INHERIT)
         dao.setHidden(bookId, false)
         dao.updateTrackPosition(track.id, 0L)
         dao.setTrackMonoModeOverride(track.id, AudioMonoMode.INHERIT)
@@ -129,6 +141,8 @@ class BackupManagerTest {
         assertEquals("indigo", restoredPrefs.lightAccent)
         assertEquals("coral", restoredPrefs.darkAccent)
         assertEquals(AudioMonoMode.AUTO, restoredPrefs.monoMode)
+        assertEquals(20, restoredPrefs.smartRewindSeconds)
+        assertEquals(1.25f, restoredPrefs.textScale, 0.001f)
         assertEquals(1.32f, restoredPrefs.defaultPlaybackSpeed, 0.001f)
         assertTrue(restoredPrefs.defaultSkipSilence)
         assertEquals(2, restoredPrefs.defaultSilenceIntensity)
@@ -137,8 +151,11 @@ class BackupManagerTest {
 
         val restoredBook = dao.getAudiobook(bookId)!!
         assertEquals(1.42f, restoredBook.playbackSpeed, 0.001f)
+        assertEquals(1.42f, restoredBook.speedOverride, 0.001f)
+        assertEquals(SilenceOverride.STRONG, restoredBook.silenceModeOverride)
         assertEquals(AudioMonoMode.LEFT, restoredBook.monoModeOverride)
         assertEquals(AudioOverride.ON, restoredBook.audioNormalizationOverride)
+        assertEquals(15, restoredBook.smartRewindOverride)
         assertTrue(restoredBook.isHidden)
         assertEquals(track.id, restoredBook.lastTrackId)
 

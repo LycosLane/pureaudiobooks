@@ -9,6 +9,9 @@ import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import com.lycoslane.pureaudiobooks.core.audio.AudioMonoMode
 import com.lycoslane.pureaudiobooks.core.audio.AudioOverride
+import com.lycoslane.pureaudiobooks.core.audio.SilenceOverride
+import com.lycoslane.pureaudiobooks.core.audio.SmartRewindOverride
+import com.lycoslane.pureaudiobooks.core.audio.SpeedOverride
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -263,7 +266,8 @@ class AudiobookDatabaseTest {
             .addMigrations(
                 PureAudiobooksDatabase.MIGRATION_1_2,
                 PureAudiobooksDatabase.MIGRATION_2_3,
-                PureAudiobooksDatabase.MIGRATION_3_4
+                PureAudiobooksDatabase.MIGRATION_3_4,
+                PureAudiobooksDatabase.MIGRATION_4_5
             )
             .allowMainThreadQueries()
             .build()
@@ -273,6 +277,9 @@ class AudiobookDatabaseTest {
             val book = migratedDao.getAudiobook(1L)!!
             assertEquals("Legacy Book", book.title)
             assertEquals(1.25f, book.playbackSpeed, 0.001f)
+            assertEquals(1.25f, book.speedOverride, 0.001f)
+            assertEquals(SilenceOverride.STRONG, book.silenceModeOverride)
+            assertEquals(SmartRewindOverride.INHERIT, book.smartRewindOverride)
             assertEquals(AudioMonoMode.INHERIT, book.monoModeOverride)
             assertEquals(AudioOverride.INHERIT, book.audioNormalizationOverride)
 
@@ -397,7 +404,8 @@ class AudiobookDatabaseTest {
             .addMigrations(
                 PureAudiobooksDatabase.MIGRATION_1_2,
                 PureAudiobooksDatabase.MIGRATION_2_3,
-                PureAudiobooksDatabase.MIGRATION_3_4
+                PureAudiobooksDatabase.MIGRATION_3_4,
+                PureAudiobooksDatabase.MIGRATION_4_5
             )
             .allowMainThreadQueries()
             .build()
@@ -408,8 +416,153 @@ class AudiobookDatabaseTest {
             assertEquals(false, book.isHidden)
             assertEquals(0L, book.lastTrackId)
             assertEquals("", book.contentFingerprint)
+            assertEquals(1.5f, book.speedOverride, 0.001f)
+            assertEquals(SilenceOverride.INHERIT, book.silenceModeOverride)
+            assertEquals(SmartRewindOverride.INHERIT, book.smartRewindOverride)
             assertEquals(AudioMonoMode.INHERIT, book.monoModeOverride)
             assertEquals(AudioOverride.INHERIT, book.audioNormalizationOverride)
+        } finally {
+            migrated.close()
+            context.deleteDatabase(dbName)
+        }
+    }
+
+    @Test
+    fun migratesV4DatabaseToV5PreservingSpeedAndSilenceOverrides() = runTest {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val dbName = "migration_4_5_test.db"
+        context.deleteDatabase(dbName)
+
+        val callback = object : SupportSQLiteOpenHelper.Callback(4) {
+            override fun onCreate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `audiobooks` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `folderKey` TEXT NOT NULL,
+                        `folderDocId` TEXT NOT NULL,
+                        `folderUri` TEXT NOT NULL,
+                        `folderName` TEXT NOT NULL,
+                        `parentFolderName` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `author` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `artworkUrl` TEXT NOT NULL,
+                        `playbackSpeed` REAL NOT NULL,
+                        `skipSilence` INTEGER NOT NULL,
+                        `silenceIntensity` INTEGER NOT NULL,
+                        `monoModeOverride` INTEGER NOT NULL,
+                        `audioNormalizationOverride` INTEGER NOT NULL,
+                        `hasTagConflict` INTEGER NOT NULL,
+                        `conflictSummaryJson` TEXT NOT NULL,
+                        `metadataLockedByUser` INTEGER NOT NULL,
+                        `isSplitByAlbum` INTEGER NOT NULL,
+                        `isFinished` INTEGER NOT NULL,
+                        `finishedAtMs` INTEGER NOT NULL,
+                        `isHidden` INTEGER NOT NULL,
+                        `lastTrackId` INTEGER NOT NULL,
+                        `deletedAtMs` INTEGER,
+                        `lastPlayedAtMs` INTEGER NOT NULL,
+                        `lastScannedMs` INTEGER NOT NULL,
+                        `contentFingerprint` TEXT NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_audiobooks_folderKey` ON `audiobooks` (`folderKey`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_audiobooks_deletedAtMs` ON `audiobooks` (`deletedAtMs`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_audiobooks_lastPlayedAtMs` ON `audiobooks` (`lastPlayedAtMs`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `chapter_tracks` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `audiobookId` INTEGER NOT NULL,
+                        `guid` TEXT NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `trackNumber` INTEGER NOT NULL,
+                        `sortOrder` INTEGER NOT NULL,
+                        `fileUri` TEXT NOT NULL,
+                        `albumTag` TEXT NOT NULL,
+                        `artistTag` TEXT NOT NULL,
+                        `durationMs` INTEGER NOT NULL,
+                        `positionMs` INTEGER NOT NULL,
+                        `isFinished` INTEGER NOT NULL,
+                        `monoModeOverride` INTEGER NOT NULL,
+                        `fileSizeBytes` INTEGER NOT NULL,
+                        `lastModifiedMs` INTEGER NOT NULL,
+                        FOREIGN KEY(`audiobookId`) REFERENCES `audiobooks`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_chapter_tracks_audiobookId` ON `chapter_tracks` (`audiobookId`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_chapter_tracks_audiobookId_guid` ON `chapter_tracks` (`audiobookId`, `guid`)")
+
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `bookmarks` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `audiobookId` INTEGER NOT NULL,
+                        `trackId` INTEGER NOT NULL,
+                        `trackTitle` TEXT NOT NULL,
+                        `positionMs` INTEGER NOT NULL,
+                        `note` TEXT NOT NULL,
+                        `createdAtMs` INTEGER NOT NULL,
+                        FOREIGN KEY(`audiobookId`) REFERENCES `audiobooks`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_bookmarks_audiobookId` ON `bookmarks` (`audiobookId`)")
+
+                db.execSQL(
+                    """
+                    INSERT INTO `audiobooks` (`id`, `folderKey`, `folderDocId`, `folderUri`, `folderName`,
+                        `parentFolderName`, `title`, `author`, `description`, `artworkUrl`,
+                        `playbackSpeed`, `skipSilence`, `silenceIntensity`, `monoModeOverride`,
+                        `audioNormalizationOverride`, `hasTagConflict`, `conflictSummaryJson`,
+                        `metadataLockedByUser`, `isSplitByAlbum`, `isFinished`, `finishedAtMs`,
+                        `isHidden`, `lastTrackId`, `deletedAtMs`, `lastPlayedAtMs`,
+                        `lastScannedMs`, `contentFingerprint`)
+                    VALUES
+                        (1, 'local://b1', 'd1', 'content://tree', 'Book 1', '', 'Book 1', 'A1', '', '',
+                         1.0, 0, 1, -1, -1, 0, '', 0, 0, 0, 0, 0, 0, NULL, 1000, 1000, ''),
+                        (2, 'local://b2', 'd2', 'content://tree', 'Book 2', '', 'Book 2', 'A2', '', '',
+                         1.35, 1, 1, -1, -1, 0, '', 0, 0, 0, 0, 0, 0, NULL, 2000, 2000, '')
+                    """.trimIndent()
+                )
+            }
+
+            override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        }
+
+        val helper = FrameworkSQLiteOpenHelperFactory().create(
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(dbName)
+                .callback(callback)
+                .build()
+        )
+        helper.writableDatabase.close()
+        helper.close()
+
+        val migrated = Room.databaseBuilder(context, PureAudiobooksDatabase::class.java, dbName)
+            .addMigrations(
+                PureAudiobooksDatabase.MIGRATION_1_2,
+                PureAudiobooksDatabase.MIGRATION_2_3,
+                PureAudiobooksDatabase.MIGRATION_3_4,
+                PureAudiobooksDatabase.MIGRATION_4_5
+            )
+            .allowMainThreadQueries()
+            .build()
+
+        try {
+            val b1 = migrated.dao().getAudiobook(1L)!!
+            assertEquals(SpeedOverride.INHERIT, b1.speedOverride, 0.001f)
+            assertEquals(SilenceOverride.INHERIT, b1.silenceModeOverride)
+            assertEquals(SmartRewindOverride.INHERIT, b1.smartRewindOverride)
+
+            val b2 = migrated.dao().getAudiobook(2L)!!
+            assertEquals(1.35f, b2.speedOverride, 0.001f)
+            assertEquals(SilenceOverride.MEDIUM, b2.silenceModeOverride)
+            assertEquals(SmartRewindOverride.INHERIT, b2.smartRewindOverride)
         } finally {
             migrated.close()
             context.deleteDatabase(dbName)
