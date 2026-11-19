@@ -64,7 +64,9 @@ import com.lycoslane.pureaudiobooks.core.network.BoundedInputStream
 import com.lycoslane.pureaudiobooks.core.network.OnlineBookMatch
 import com.lycoslane.pureaudiobooks.core.preferences.AppSettings
 import com.lycoslane.pureaudiobooks.ui.common.Formatters
+import com.lycoslane.pureaudiobooks.ui.common.PinchZoomText
 import com.lycoslane.pureaudiobooks.ui.common.PureSegmentedControl
+import com.lycoslane.pureaudiobooks.ui.common.TextReaderOverlay
 import com.lycoslane.pureaudiobooks.ui.player.PlayerControlPanel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -134,6 +136,7 @@ fun BookDetailScreen(
     var metadataCoverFocusMode by rememberSaveable { mutableStateOf(false) }
     var handledInitialMetadata by rememberSaveable { mutableStateOf(false) }
     var showCoverLightbox by rememberSaveable { mutableStateOf(false) }
+    var showDescriptionReader by rememberSaveable { mutableStateOf(false) }
     var showBookSettingsSheet by rememberSaveable { mutableStateOf(false) }
     var activePanel by rememberSaveable { mutableStateOf(PlayerControlPanel.NONE) }
     var showBookmarkDialog by rememberSaveable { mutableStateOf(false) }
@@ -439,11 +442,22 @@ fun BookDetailScreen(
                                 modifier = Modifier.padding(14.dp),
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Text(
+                                PinchZoomText(
                                     text = book.description.ifBlank { stringResource(R.string.no_description_available) },
+                                    textScale = globalSettings.textScale,
+                                    onTextScaleChange = onTextScaleChange,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    onClick = if (book.description.isNotBlank()) ({ showDescriptionReader = true }) else null,
+                                    modifier = Modifier.fillMaxWidth()
                                 )
+                                if (book.description.isNotBlank()) {
+                                    Text(
+                                        text = stringResource(R.string.tap_to_read_fullscreen_hint),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                                    )
+                                }
                                 OutlinedButton(
                                     onClick = {
                                         metadataCoverFocusMode = false
@@ -476,6 +490,17 @@ fun BookDetailScreen(
             onPickCoverFromGallery = {
                 coverPickerLauncher.launch("image/*")
             }
+        )
+    }
+
+    if (showDescriptionReader && book != null && book.description.isNotBlank()) {
+        TextReaderOverlay(
+            title = book.title,
+            subtitle = book.author.ifBlank { null },
+            text = book.description,
+            textScale = globalSettings.textScale,
+            onTextScaleChange = onTextScaleChange,
+            onDismiss = { showDescriptionReader = false }
         )
     }
     }
@@ -545,7 +570,6 @@ fun BookDetailScreen(
             onSetMonoModeOverride = onSetBookMonoOverride,
             onSetNormalizationOverride = onSetBookNormalizationOverride,
             onSetSmartRewindOverride = onSetBookSmartRewindOverride,
-            onTextScaleChange = onTextScaleChange,
             onSetHidden = { hidden ->
                 showBookSettingsSheet = false
                 onSetHidden(hidden)
@@ -573,8 +597,6 @@ fun BookDetailScreen(
             book = book,
             coverFocusMode = metadataCoverFocusMode,
             onlineLookupEnabled = globalSettings.onlineLookupEnabled,
-            textScale = globalSettings.textScale,
-            onTextScaleChange = onTextScaleChange,
             onlineResults = onlineResults,
             isSearchingOnline = isSearchingOnline,
             onEnableOnlineLookup = onEnableOnlineLookup,

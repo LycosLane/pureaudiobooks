@@ -25,11 +25,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -37,6 +39,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -86,7 +89,7 @@ fun SettingsScreen(
     onChangeThemeMode: (String) -> Unit,
     onChangeLightAccent: (String) -> Unit,
     onChangeDarkAccent: (String) -> Unit,
-    onResetTextScale: () -> Unit,
+    onChangeUiScale: (Float) -> Unit,
     onChangeDefaultSpeed: (Float) -> Unit,
     onChangeDefaultSilenceMode: (Boolean, Int) -> Unit,
     onToggleAudioNormalization: (Boolean) -> Unit,
@@ -239,32 +242,69 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.settings_text_size),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = stringResource(R.string.settings_text_size_hint),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = stringResource(R.string.settings_ui_zoom),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = "${(settings.textScale * 100f).roundToInt()}%",
+                            text = "${(settings.uiScale * 100f).roundToInt()}%",
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        if (abs(settings.textScale - 1.0f) >= 0.02f) {
-                            TextButton(onClick = onResetTextScale) {
+                        if (abs(settings.uiScale - 1.0f) >= 0.02f) {
+                            TextButton(onClick = { onChangeUiScale(1.0f) }) {
                                 Text(stringResource(R.string.action_reset))
                             }
                         }
                     }
                 }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = {
+                            val next = (((settings.uiScale - 0.05f) * 20f).roundToInt() / 20f).coerceIn(0.80f, 1.60f)
+                            onChangeUiScale(next)
+                        },
+                        enabled = settings.uiScale > 0.805f
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Remove,
+                            contentDescription = stringResource(R.string.cd_decrease_zoom)
+                        )
+                    }
+                    Slider(
+                        value = settings.uiScale,
+                        onValueChange = { raw ->
+                            val snapped = ((raw * 20f).roundToInt() / 20f).coerceIn(0.80f, 1.60f)
+                            onChangeUiScale(snapped)
+                        },
+                        valueRange = 0.80f..1.60f,
+                        steps = 15,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = {
+                            val next = (((settings.uiScale + 0.05f) * 20f).roundToInt() / 20f).coerceIn(0.80f, 1.60f)
+                            onChangeUiScale(next)
+                        },
+                        enabled = settings.uiScale < 1.595f
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = stringResource(R.string.cd_increase_zoom)
+                        )
+                    }
+                }
+                Text(
+                    text = stringResource(R.string.settings_ui_zoom_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             // 2. Playback

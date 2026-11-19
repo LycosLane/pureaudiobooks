@@ -61,7 +61,6 @@ import com.lycoslane.pureaudiobooks.ui.common.Formatters
 import com.lycoslane.pureaudiobooks.ui.common.MonoModeSelector
 import com.lycoslane.pureaudiobooks.ui.common.PureSegmentedControl
 import com.lycoslane.pureaudiobooks.ui.common.monoModeLabel
-import com.lycoslane.pureaudiobooks.ui.common.pinchToZoomTextScale
 import com.lycoslane.pureaudiobooks.ui.player.SpeedControlPanel
 import com.lycoslane.pureaudiobooks.ui.settings.SectionDivider
 import com.lycoslane.pureaudiobooks.ui.settings.SettingsSection
@@ -81,7 +80,6 @@ fun AudiobookSettingsSheet(
     onSetMonoModeOverride: (Int) -> Unit,
     onSetNormalizationOverride: (Int) -> Unit,
     onSetSmartRewindOverride: (Int) -> Unit,
-    onTextScaleChange: (Float) -> Unit,
     onSetHidden: (Boolean) -> Unit,
     onMarkFinished: (Boolean) -> Unit,
     onResetProgress: () -> Unit,
@@ -102,10 +100,6 @@ fun AudiobookSettingsSheet(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .pinchToZoomTextScale(
-                    textScale = globalSettings.textScale,
-                    onTextScaleChange = onTextScaleChange
-                )
                 .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(horizontal = 16.dp)

@@ -31,7 +31,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -52,7 +51,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import com.lycoslane.pureaudiobooks.R
 import com.lycoslane.pureaudiobooks.ui.common.BookCoverImage
-import com.lycoslane.pureaudiobooks.ui.common.LocalSuspendGlobalTextZoom
 import kotlin.math.roundToInt
 
 @Composable
@@ -68,18 +66,7 @@ fun CoverLightboxDialog(
     var offsetX by remember(artworkUrl) { mutableFloatStateOf(0f) }
     var offsetY by remember(artworkUrl) { mutableFloatStateOf(0f) }
 
-    val suspendGlobalZoom = LocalSuspendGlobalTextZoom.current
     BackHandler(onBack = onDismiss)
-    DisposableEffect(suspendGlobalZoom) {
-        if (suspendGlobalZoom != null) {
-            suspendGlobalZoom.intValue += 1
-        }
-        onDispose {
-            if (suspendGlobalZoom != null) {
-                suspendGlobalZoom.intValue = (suspendGlobalZoom.intValue - 1).coerceAtLeast(0)
-            }
-        }
-    }
 
     Surface(
         modifier = Modifier

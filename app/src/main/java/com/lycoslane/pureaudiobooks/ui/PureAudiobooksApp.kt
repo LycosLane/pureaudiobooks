@@ -189,7 +189,6 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     onSetBookSmartRewindOverride = { bookId, rwOv ->
                         libraryViewModel.setBookSmartRewindOverride(bookId, rwOv)
                     },
-                    onTextScaleChange = { scale -> libraryViewModel.preferences.setTextScale(scale) },
                     onApplyBookAudioToAll = { book ->
                         libraryViewModel.applyBookAudioSettingsToAll(book) {
                             scope.launch {
@@ -228,7 +227,7 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     onChangeThemeMode = { libraryViewModel.preferences.setThemeMode(it) },
                     onChangeLightAccent = { libraryViewModel.preferences.setLightAccent(it) },
                     onChangeDarkAccent = { libraryViewModel.preferences.setDarkAccent(it) },
-                    onResetTextScale = { libraryViewModel.preferences.setTextScale(1.0f) },
+                    onChangeUiScale = { libraryViewModel.preferences.setUiScale(it) },
                     onChangeDefaultSpeed = { libraryViewModel.preferences.setDefaultPlaybackSpeed(it) },
                     onChangeDefaultSilenceMode = { enabled, intensity ->
                         libraryViewModel.preferences.setDefaultSilenceMode(enabled, intensity)

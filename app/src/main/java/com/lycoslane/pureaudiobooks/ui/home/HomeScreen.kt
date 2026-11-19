@@ -92,7 +92,6 @@ fun HomeScreen(
     onSetBookMonoOverride: (Long, Int) -> Unit,
     onSetBookNormalizationOverride: (Long, Int) -> Unit,
     onSetBookSmartRewindOverride: (Long, Int) -> Unit,
-    onTextScaleChange: (Float) -> Unit,
     onApplyBookAudioToAll: (AudiobookEntity) -> Unit,
     onMarkFinished: (Long, Boolean) -> Unit,
     onResetProgress: (Long) -> Unit,
@@ -536,7 +535,6 @@ fun HomeScreen(
             onSetMonoModeOverride = { mode -> onSetBookMonoOverride(book.id, mode) },
             onSetNormalizationOverride = { ov -> onSetBookNormalizationOverride(book.id, ov) },
             onSetSmartRewindOverride = { rwOv -> onSetBookSmartRewindOverride(book.id, rwOv) },
-            onTextScaleChange = onTextScaleChange,
             onSetHidden = { hidden ->
                 bookMenuTarget = null
                 onSetHidden(book.id, hidden)

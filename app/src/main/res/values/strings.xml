@@ -116,8 +116,10 @@
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_accent_color">Accent color</string>
-    <string name="settings_text_size">Text size</string>
-    <string name="settings_text_size_hint">Pinch with two fingers anywhere</string>
+    <string name="settings_ui_zoom">Text &amp; UI Zoom</string>
+    <string name="settings_ui_zoom_hint">Scales app text and labels. Book info text can also be pinch-zoomed directly.</string>
+    <string name="cd_decrease_zoom">Decrease zoom</string>
+    <string name="cd_increase_zoom">Increase zoom</string>
     <string name="accent_amber">Amber</string>
     <string name="accent_teal">Ocean</string>
     <string name="accent_indigo">Indigo</string>
@@ -225,6 +227,7 @@
     <string name="cover_updated">Cover updated</string>
     <string name="tap_active_tab_to_collapse">Tap active tab again to collapse</string>
     <string name="no_description_available">No description available.</string>
+    <string name="tap_to_read_fullscreen_hint">Tap text for fullscreen reader · Pinch to zoom</string>
     <string name="enable_online_lookup_action">Enable online lookup</string>
     <string name="metadata_candidates_header">Results (%1$d) - tap to fill all fields</string>
     <string name="metadata_select_all_new">All new</string>

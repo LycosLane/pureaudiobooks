@@ -20,7 +20,8 @@ data class AppSettings(
     val audioNormalizationEnabled: Boolean = false,
     val monoMode: Int = AudioMonoMode.OFF,
     val bluetoothNextPrevSeeks: Boolean = true, // true = -10s/+30s, false = prev/next track
-    val textScale: Float = 1.0f, // 0.8f..1.8f
+    val textScale: Float = 1.0f, // 0.8f..1.8f (pinch-to-zoom info/reader text)
+    val uiScale: Float = 1.0f, // 0.8f..1.6f (global interface/font scale)
     val appLanguage: String = "en", // "en" or "de"
     val gridLayout: Boolean = true,
     val themeMode: String = AppPreferences.THEME_SYSTEM,
@@ -60,6 +61,7 @@ class AppPreferences(context: Context) {
         monoMode = AudioMonoMode.normalizeConcrete(prefs.getInt(KEY_MONO_MODE, AudioMonoMode.OFF)),
         bluetoothNextPrevSeeks = prefs.getBoolean(KEY_BLUETOOTH_NEXT_PREV_SEEKS, true),
         textScale = prefs.getFloat(KEY_TEXT_SCALE, 1.0f).coerceIn(0.8f, 1.8f),
+        uiScale = prefs.getFloat(KEY_UI_SCALE, 1.0f).coerceIn(0.8f, 1.6f),
         appLanguage = LocaleHelper.getEffectiveLanguage(context),
         gridLayout = prefs.getBoolean(KEY_GRID_LAYOUT, true),
         themeMode = normalizeThemeMode(prefs.getString(KEY_THEME_MODE, THEME_SYSTEM)),
@@ -136,6 +138,12 @@ class AppPreferences(context: Context) {
         _settings.update { it.copy(textScale = clamped) }
     }
 
+    fun setUiScale(scale: Float) {
+        val clamped = scale.coerceIn(0.8f, 1.6f)
+        prefs.edit().putFloat(KEY_UI_SCALE, clamped).apply()
+        _settings.update { it.copy(uiScale = clamped) }
+    }
+
     @SuppressLint("ApplySharedPref")
     fun setAppLanguage(languageTag: String) {
         val normalized = if (languageTag == "de") "de" else "en"
@@ -197,6 +205,7 @@ class AppPreferences(context: Context) {
         private const val KEY_MONO_MODE = "mono_mode"
         private const val KEY_BLUETOOTH_NEXT_PREV_SEEKS = "bluetooth_next_prev_seeks"
         private const val KEY_TEXT_SCALE = "text_scale"
+        private const val KEY_UI_SCALE = "ui_scale"
         private const val KEY_GRID_LAYOUT = "grid_layout"
         private const val KEY_THEME_MODE = "theme_mode"
         private const val KEY_LIGHT_ACCENT = "light_accent"

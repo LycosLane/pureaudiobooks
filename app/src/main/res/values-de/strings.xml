@@ -116,8 +116,10 @@
     <string name="settings_theme_light">Hell</string>
     <string name="settings_theme_dark">Dunkel</string>
     <string name="settings_accent_color">Akzentfarbe</string>
-    <string name="settings_text_size">Textgröße</string>
-    <string name="settings_text_size_hint">Überall mit zwei Fingern zoomen</string>
+    <string name="settings_ui_zoom">Text- &amp; UI-Zoom</string>
+    <string name="settings_ui_zoom_hint">Skaliert App-Texte und Beschriftungen. Buch-Infotexte lassen sich zusätzlich direkt per Pinch-Zoom vergrößern.</string>
+    <string name="cd_decrease_zoom">Zoom verkleinern</string>
+    <string name="cd_increase_zoom">Zoom vergrößern</string>
     <string name="accent_amber">Bernstein</string>
     <string name="accent_teal">Ozean</string>
     <string name="accent_indigo">Indigo</string>
@@ -225,6 +227,7 @@
     <string name="cover_updated">Cover aktualisiert</string>
     <string name="tap_active_tab_to_collapse">Aktiven Tab erneut tippen zum Einklappen</string>
     <string name="no_description_available">Keine Beschreibung vorhanden.</string>
+    <string name="tap_to_read_fullscreen_hint">Text tippen für Vollbild-Lesemodus · Zwei Finger zum Zoomen</string>
     <string name="enable_online_lookup_action">Online-Suche aktivieren</string>
     <string name="metadata_candidates_header">Treffer (%1$d) - für alle Felder wählen</string>
     <string name="metadata_select_all_new">Alle neuen</string>

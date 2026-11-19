@@ -40,6 +40,7 @@ internal class BackupManager(
                 put("monoMode", s.monoMode)
                 put("bluetoothNextPrevSeeks", s.bluetoothNextPrevSeeks)
                 put("textScale", s.textScale.toDouble())
+                put("uiScale", s.uiScale.toDouble())
                 put("appLanguage", s.appLanguage)
                 put("gridLayout", s.gridLayout)
                 put("themeMode", s.themeMode)
@@ -292,6 +293,10 @@ internal class BackupManager(
         if (s.has("textScale")) {
             val scale = s.optDouble("textScale", 1.0)
             if (scale.isFinite()) preferences.setTextScale(scale.toFloat())
+        }
+        if (s.has("uiScale")) {
+            val scale = s.optDouble("uiScale", 1.0)
+            if (scale.isFinite()) preferences.setUiScale(scale.toFloat())
         }
         if (s.has("appLanguage")) preferences.setAppLanguage(s.optString("appLanguage", "en"))
         if (s.has("gridLayout")) preferences.setGridLayout(s.optBoolean("gridLayout", true))
