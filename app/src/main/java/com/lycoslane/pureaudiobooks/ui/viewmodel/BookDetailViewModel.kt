@@ -9,6 +9,7 @@ import com.lycoslane.pureaudiobooks.core.database.BookmarkEntity
 import com.lycoslane.pureaudiobooks.core.database.ChapterTrackEntity
 import com.lycoslane.pureaudiobooks.core.network.OnlineBookMatch
 import com.lycoslane.pureaudiobooks.core.network.OnlineMetadataClient
+import com.lycoslane.pureaudiobooks.ui.common.Formatters
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -37,20 +38,22 @@ class BookDetailViewModel(
 
     fun playBook(specificTrack: ChapterTrackEntity? = null) {
         val data = bookWithTracks.value ?: return
-        val sortedTracks = data.tracks.sortedWith(
-            compareBy<ChapterTrackEntity> { it.sortOrder }
-                .thenBy { it.trackNumber }
-                .thenBy { it.title }
-        )
+        val sortedTracks = Formatters.sortedTracks(data.tracks)
         app.playerController.playAudiobook(data.audiobook, sortedTracks, specificTrack)
     }
 
     fun setTrackFinished(trackId: Long, finished: Boolean) {
-        viewModelScope.launch { repo.setTrackFinished(trackId, finished) }
+        viewModelScope.launch {
+            repo.setTrackFinished(trackId, finished)
+            app.playerController.refreshCurrentBookMetadata(audiobookId)
+        }
     }
 
     fun markBookFinished(finished: Boolean) {
-        viewModelScope.launch { repo.markBookFinished(audiobookId, finished) }
+        viewModelScope.launch {
+            if (finished) app.playerController.stopIfPlayingBook(audiobookId)
+            repo.markBookFinished(audiobookId, finished)
+        }
     }
 
     fun resetBookProgress() {
@@ -68,21 +71,23 @@ class BookDetailViewModel(
     }
 
     fun setPlaybackSpeed(speed: Float) {
-        viewModelScope.launch {
-            repo.updateBookSpeed(audiobookId, speed)
-            if (app.playerController.state.value.currentBook?.id == audiobookId) {
-                app.playerController.setPlaybackSpeed(speed)
-            }
-        }
+        app.playerController.setBookPlaybackSpeed(audiobookId, speed)
     }
 
     fun setSkipSilence(enabled: Boolean, intensity: Int) {
-        viewModelScope.launch {
-            repo.updateBookSilence(audiobookId, enabled, intensity)
-            if (app.playerController.state.value.currentBook?.id == audiobookId) {
-                app.playerController.setSkipSilence(enabled, intensity)
-            }
-        }
+        app.playerController.setBookSilenceMode(audiobookId, enabled, intensity)
+    }
+
+    fun setTrackMonoOverride(trackId: Long, mode: Int) {
+        app.playerController.setTrackMonoOverride(trackId, mode)
+    }
+
+    fun setBookMonoOverride(mode: Int) {
+        app.playerController.setBookMonoOverride(audiobookId, mode)
+    }
+
+    fun setBookNormalizationOverride(override: Int) {
+        app.playerController.setBookNormalizationOverride(audiobookId, override)
     }
 
     fun addBookmark(track: ChapterTrackEntity, positionMs: Long, note: String) {

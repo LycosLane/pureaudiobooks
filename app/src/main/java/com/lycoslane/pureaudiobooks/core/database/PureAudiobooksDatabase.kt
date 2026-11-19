@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ChapterTrackEntity::class,
         BookmarkEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class PureAudiobooksDatabase : RoomDatabase() {
@@ -36,6 +36,14 @@ abstract class PureAudiobooksDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE audiobooks ADD COLUMN monoModeOverride INTEGER NOT NULL DEFAULT -1")
+                db.execSQL("ALTER TABLE audiobooks ADD COLUMN audioNormalizationOverride INTEGER NOT NULL DEFAULT -1")
+                db.execSQL("ALTER TABLE chapter_tracks ADD COLUMN monoModeOverride INTEGER NOT NULL DEFAULT -1")
+            }
+        }
+
         fun getInstance(context: Context): PureAudiobooksDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -43,7 +51,7 @@ abstract class PureAudiobooksDatabase : RoomDatabase() {
                     PureAudiobooksDatabase::class.java,
                     "pureaudiobooks.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { INSTANCE = it }
             }

@@ -1,6 +1,11 @@
 package com.lycoslane.pureaudiobooks.ui.common
 
+import com.lycoslane.pureaudiobooks.core.database.AudiobookWithTracks
 import com.lycoslane.pureaudiobooks.core.database.ChapterTrackEntity
+import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 data class BookProgressSummary(
     val totalDurationMs: Long,
@@ -35,6 +40,37 @@ object Formatters {
             hours > 0 -> "${hours}h"
             else -> "${mins}m"
         }
+    }
+
+    fun formatPlaybackSpeed(speed: Float, locale: Locale = Locale.getDefault()): String {
+        val hundredths = (speed.coerceIn(0.50f, 3.00f) * 100f).roundToInt()
+        val normalized = hundredths / 100f
+        return if (hundredths % 10 == 0) {
+            String.format(locale, "%.1fx", normalized)
+        } else {
+            String.format(locale, "%.2fx", normalized)
+        }
+    }
+
+    fun hasCustomSpeed(speed: Float): Boolean = abs(speed - 1.0f) >= 0.01f
+
+    fun effectiveDurationMs(rawMs: Long, playbackSpeed: Float): Long {
+        if (rawMs <= 0L) return 0L
+        val safeSpeed = playbackSpeed.coerceIn(0.50f, 3.00f)
+        return (rawMs.toDouble() / safeSpeed.toDouble()).roundToLong().coerceAtLeast(0L)
+    }
+
+    fun sortedTracks(tracks: List<ChapterTrackEntity>): List<ChapterTrackEntity> =
+        tracks.sortedWith(
+            compareBy<ChapterTrackEntity> { it.sortOrder }
+                .thenBy { it.trackNumber }
+                .thenBy { it.title }
+        )
+
+    fun isBookInProgress(item: AudiobookWithTracks): Boolean {
+        val book = item.audiobook
+        if (book.isFinished) return false
+        return book.lastTrackId > 0L || item.tracks.any { it.positionMs > 0L || it.isFinished }
     }
 
     fun calculateBookProgress(

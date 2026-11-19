@@ -1,6 +1,8 @@
 package com.lycoslane.pureaudiobooks.domain.repository
 
 import android.content.Context
+import com.lycoslane.pureaudiobooks.core.audio.AudioMonoMode
+import com.lycoslane.pureaudiobooks.core.audio.AudioOverride
 import com.lycoslane.pureaudiobooks.core.database.AudiobookEntity
 import com.lycoslane.pureaudiobooks.core.database.AudiobookWithTracks
 import com.lycoslane.pureaudiobooks.core.database.BookmarkEntity
@@ -14,8 +16,6 @@ import com.lycoslane.pureaudiobooks.core.preferences.AppPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
 
@@ -24,6 +24,8 @@ class AudiobookRepository(
     private val dao: PureAudiobooksDao,
     private val preferences: AppPreferences
 ) {
+    private val backupManager = BackupManager(dao, preferences)
+
     fun observeActiveAudiobooks(): Flow<List<AudiobookWithTracks>> = dao.observeActiveAudiobooks()
 
     fun observeTrashedAudiobooks(): Flow<List<AudiobookWithTracks>> = dao.observeTrashedAudiobooks()
@@ -45,7 +47,6 @@ class AudiobookRepository(
         val settings = preferences.settings.value
         val now = System.currentTimeMillis()
 
-        // 1. Auto-move finished books to trash if configured
         val autoDays = settings.autoMoveFinishedToTrashDays
         if (autoDays >= 0) {
             val cutoff = now - autoDays * 24L * 60L * 60L * 1000L
@@ -55,7 +56,6 @@ class AudiobookRepository(
             }
         }
 
-        // 2. Permanently delete expired trash items
         val retentionHours = settings.trashRetentionHours
         val expireCutoff = now - retentionHours * 60L * 60L * 1000L
         val expired = dao.getExpiredTrashedAudiobooks(expireCutoff)
@@ -143,6 +143,8 @@ class AudiobookRepository(
                     playbackSpeed = book.playbackSpeed,
                     skipSilence = book.skipSilence,
                     silenceIntensity = book.silenceIntensity,
+                    monoModeOverride = book.monoModeOverride,
+                    audioNormalizationOverride = book.audioNormalizationOverride,
                     hasTagConflict = false,
                     conflictSummaryJson = "",
                     metadataLockedByUser = true,
@@ -242,7 +244,7 @@ class AudiobookRepository(
     }
 
     suspend fun updateBookSpeed(audiobookId: Long, speed: Float) = withContext(Dispatchers.IO) {
-        dao.updatePlaybackSpeed(audiobookId, speed.coerceIn(0.75f, 3.0f))
+        dao.updatePlaybackSpeed(audiobookId, speed.coerceIn(0.50f, 3.00f))
     }
 
     suspend fun updateBookSilence(audiobookId: Long, enabled: Boolean, intensity: Int) =
@@ -250,116 +252,22 @@ class AudiobookRepository(
             dao.updateSkipSilence(audiobookId, enabled, intensity.coerceIn(0, 2))
         }
 
-    suspend fun exportBackupJson(): String = withContext(Dispatchers.IO) {
-        val books = dao.getAllAudiobooksOnce()
-        val bookmarks = dao.getAllBookmarksOnce()
-        val s = preferences.settings.value
-
-        val root = JSONObject()
-        root.put("version", 1)
-        root.put("exportedAtMs", System.currentTimeMillis())
-
-        root.put("settings", JSONObject().apply {
-            put("onlineLookupEnabled", s.onlineLookupEnabled)
-            put("trashRetentionHours", s.trashRetentionHours)
-            put("autoMoveFinishedToTrashDays", s.autoMoveFinishedToTrashDays)
-            put("smartRewindSeconds", s.smartRewindSeconds)
-            put("audioNormalizationEnabled", s.audioNormalizationEnabled)
-            put("bluetoothNextPrevSeeks", s.bluetoothNextPrevSeeks)
-            put("appLanguage", s.appLanguage)
-            put("gridLayout", s.gridLayout)
-        })
-
-        val booksArr = JSONArray()
-        for (book in books) {
-            val tracks = dao.getTracksForAudiobook(book.id)
-            val tracksArr = JSONArray()
-            for (t in tracks) {
-                tracksArr.put(JSONObject().apply {
-                    put("guid", t.guid)
-                    put("positionMs", t.positionMs)
-                    put("isFinished", t.isFinished)
-                })
-            }
-            booksArr.put(JSONObject().apply {
-                put("folderKey", book.folderKey)
-                put("title", book.title)
-                put("author", book.author)
-                put("description", book.description)
-                put("playbackSpeed", book.playbackSpeed.toDouble())
-                put("skipSilence", book.skipSilence)
-                put("silenceIntensity", book.silenceIntensity)
-                put("metadataLockedByUser", book.metadataLockedByUser)
-                put("isFinished", book.isFinished)
-                put("lastPlayedAtMs", book.lastPlayedAtMs)
-                put("tracks", tracksArr)
-            })
-        }
-        root.put("books", booksArr)
-
-        val bmArr = JSONArray()
-        val bookKeyById = books.associate { it.id to it.folderKey }
-        for (bm in bookmarks) {
-            val fk = bookKeyById[bm.audiobookId] ?: continue
-            bmArr.put(JSONObject().apply {
-                put("folderKey", fk)
-                put("trackTitle", bm.trackTitle)
-                put("positionMs", bm.positionMs)
-                put("note", bm.note)
-                put("createdAtMs", bm.createdAtMs)
-            })
-        }
-        root.put("bookmarks", bmArr)
-        root.toString(2)
+    suspend fun updateBookMonoOverride(audiobookId: Long, mode: Int) = withContext(Dispatchers.IO) {
+        dao.setBookMonoModeOverride(audiobookId, AudioMonoMode.normalizeOverride(mode))
     }
 
-    suspend fun importBackupJson(rawJson: String): Int = withContext(Dispatchers.IO) {
-        val root = JSONObject(rawJson)
-        root.optJSONObject("settings")?.let { s ->
-            if (s.has("onlineLookupEnabled")) preferences.setOnlineLookupEnabled(s.optBoolean("onlineLookupEnabled"))
-            if (s.has("trashRetentionHours")) preferences.setTrashRetentionHours(s.optInt("trashRetentionHours", 48))
-            if (s.has("autoMoveFinishedToTrashDays")) preferences.setAutoMoveFinishedToTrashDays(s.optInt("autoMoveFinishedToTrashDays", -1))
-            if (s.has("smartRewindSeconds")) preferences.setSmartRewindSeconds(s.optInt("smartRewindSeconds", 10))
-            if (s.has("audioNormalizationEnabled")) preferences.setAudioNormalizationEnabled(s.optBoolean("audioNormalizationEnabled"))
-            if (s.has("bluetoothNextPrevSeeks")) preferences.setBluetoothNextPrevSeeks(s.optBoolean("bluetoothNextPrevSeeks"))
-            if (s.has("appLanguage")) preferences.setAppLanguage(s.optString("appLanguage", "en"))
-            if (s.has("gridLayout")) preferences.setGridLayout(s.optBoolean("gridLayout", true))
+    suspend fun updateTrackMonoOverride(trackId: Long, mode: Int) = withContext(Dispatchers.IO) {
+        dao.setTrackMonoModeOverride(trackId, AudioMonoMode.normalizeOverride(mode))
+    }
+
+    suspend fun updateBookNormalizationOverride(audiobookId: Long, override: Int) =
+        withContext(Dispatchers.IO) {
+            dao.setBookAudioNormalizationOverride(audiobookId, AudioOverride.normalize(override))
         }
 
-        var restored = 0
-        val booksArr = root.optJSONArray("books") ?: JSONArray()
-        for (i in 0 until booksArr.length()) {
-            val obj = booksArr.optJSONObject(i) ?: continue
-            val folderKey = obj.optString("folderKey")
-            val existing = dao.getAudiobookByFolderKey(folderKey) ?: continue
-            dao.updatePlaybackSpeed(existing.id, obj.optDouble("playbackSpeed", 1.0).toFloat())
-            dao.updateSkipSilence(existing.id, obj.optBoolean("skipSilence"), obj.optInt("silenceIntensity", 1))
-            if (obj.optBoolean("metadataLockedByUser", false)) {
-                dao.updateAudiobookMetadata(
-                    audiobookId = existing.id,
-                    title = obj.optString("title", existing.title),
-                    author = obj.optString("author", existing.author),
-                    description = obj.optString("description", existing.description),
-                    artworkUrl = existing.artworkUrl,
-                    hasTagConflict = false,
-                    conflictSummaryJson = existing.conflictSummaryJson,
-                    metadataLockedByUser = true,
-                    lastScannedMs = System.currentTimeMillis()
-                )
-            }
-            val tracksByGuid = dao.getTracksForAudiobook(existing.id).associateBy { it.guid }
-            val tracksArr = obj.optJSONArray("tracks") ?: JSONArray()
-            for (j in 0 until tracksArr.length()) {
-                val tObj = tracksArr.optJSONObject(j) ?: continue
-                val guid = tObj.optString("guid")
-                val target = tracksByGuid[guid] ?: continue
-                dao.updateTrackPosition(target.id, tObj.optLong("positionMs", 0L))
-                dao.setTrackFinished(target.id, tObj.optBoolean("isFinished", false))
-            }
-            restored++
-        }
-        restored
-    }
+    suspend fun exportBackupJson(): String = backupManager.exportBackupJson()
+
+    suspend fun importBackupJson(rawJson: String): Int = backupManager.importBackupJson(rawJson)
 
     private fun sha256(input: String): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray())

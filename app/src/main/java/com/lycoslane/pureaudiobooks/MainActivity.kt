@@ -8,8 +8,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lycoslane.pureaudiobooks.core.preferences.LocaleHelper
 import com.lycoslane.pureaudiobooks.ui.PureAudiobooksApp
 import com.lycoslane.pureaudiobooks.ui.theme.PureAudiobooksTheme
@@ -42,7 +44,12 @@ class MainActivity : ComponentActivity() {
 
         val app = application as PureAudiobooksApplication
         setContent {
-            PureAudiobooksTheme {
+            val settings by app.preferences.settings.collectAsStateWithLifecycle()
+            PureAudiobooksTheme(
+                themeMode = settings.themeMode,
+                lightAccentId = settings.lightAccent,
+                darkAccentId = settings.darkAccent
+            ) {
                 PureAudiobooksApp(app)
             }
         }

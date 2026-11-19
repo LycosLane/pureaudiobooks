@@ -4,16 +4,23 @@
 
     <string name="cd_scan">Scan folder</string>
     <string name="cd_toggle_layout">Toggle grid or list</string>
-    <string name="cd_settings">Settings</string>
+    <string name="cd_settings">Global settings</string>
     <string name="cd_back">Back</string>
     <string name="cd_edit_metadata">Edit metadata</string>
+    <string name="cd_book_settings">Audiobook settings</string>
     <string name="cd_more">More options</string>
+    <string name="cd_clear_search">Clear search</string>
     <string name="cd_play">Play</string>
     <string name="cd_pause">Pause</string>
     <string name="cd_prev_chapter">Previous chapter</string>
     <string name="cd_next_chapter">Next chapter</string>
     <string name="cd_rewind_10">Rewind 10 seconds</string>
     <string name="cd_forward_30">Forward 30 seconds</string>
+    <string name="cd_expand_player">Open player</string>
+    <string name="cd_speed_decrease">Decrease speed</string>
+    <string name="cd_speed_increase">Increase speed</string>
+    <string name="cd_mono_info">Mono mode info</string>
+    <string name="cd_online_lookup_info">Online lookup info</string>
 
     <string name="empty_no_folder_title">No audiobook folder selected</string>
     <string name="empty_no_folder_desc">Select the folder on your device where your audiobooks are stored.</string>
@@ -22,31 +29,40 @@
     <string name="search_library_hint">Search title or author…</string>
     <string name="empty_filter_results">No audiobooks match this filter.</string>
 
-    <string name="filter_all">All</string>
-    <string name="filter_in_progress">In progress</string>
+    <string name="filter_active">Active</string>
     <string name="filter_finished">Finished</string>
-    <string name="filter_conflicts">Tag conflicts</string>
     <string name="filter_hidden">Hidden</string>
+    <string name="filter_conflicts">Tag conflicts</string>
     <string name="filter_trash">Trash</string>
 
+    <string name="section_continue_listening">Continue listening</string>
+    <string name="section_not_started">Not started</string>
+    <string name="section_remaining_focus">Remaining</string>
+    <string name="section_total_duration">Duration</string>
+
     <string name="tracks_count">%1$d tracks</string>
-    <string name="remaining_suffix">left</string>
+    <string name="remaining_time_compact">%1$s left</string>
+    <string name="remaining_time_at_speed">%1$s left at %2$s</string>
+    <string name="listened_of_total">Listened: %1$s / %2$s</string>
+    <string name="real_time_remaining">Real time: %1$s</string>
+    <string name="chapter_prefix">Chapter %1$d/%2$d</string>
+    <string name="chapter_short">Ch. %1$d/%2$d</string>
+
     <string name="open_book">Open audiobook</string>
     <string name="reset_progress">Reset playback progress</string>
+    <string name="reset_progress_short">Reset progress</string>
     <string name="hide_book">Hide from library</string>
     <string name="unhide_book">Show in library</string>
+    <string name="action_unhide_short">Show</string>
     <string name="move_to_trash">Move to trash</string>
     <string name="restore">Restore</string>
     <string name="delete_permanently">Delete permanently</string>
     <string name="delete_permanently_confirm">Permanently delete \"%1$s\"? If write access is granted, the local audio files will also be removed.</string>
 
-    <string name="play_resume">Play / Resume</string>
-    <string name="pause">Pause</string>
     <string name="mark_finished">Mark as finished</string>
     <string name="mark_unfinished">Mark as unfinished</string>
     <string name="finished">Finished</string>
     <string name="chapters_header">Chapters (%1$d)</string>
-    <string name="chapter_prefix">Chapter %1$d/%2$d</string>
 
     <string name="tag_conflict_banner_title">Incomplete or mixed tags detected</string>
     <string name="tag_conflict_banner_desc">Tap to choose between folder name and file tags, or split albums.</string>
@@ -73,49 +89,111 @@
     <string name="show">Show</string>
     <string name="hide">Hide</string>
 
-    <string name="playback_speed_label">Speed: %1$.2fx</string>
+    <string name="player_speed_title">Playback speed</string>
+    <string name="player_silence">Silence</string>
+    <string name="player_silence_short">Silence</string>
     <string name="skip_silence">Skip silence</string>
     <string name="silence_soft">Soft</string>
     <string name="silence_medium">Medium</string>
     <string name="silence_strong">Strong</string>
+    <string name="player_mono_short">Mono</string>
+    <string name="player_sleep">Sleep</string>
+    <string name="player_sleep_title">Sleep timer</string>
+    <string name="player_chapters_short">Chapters</string>
+    <string name="player_description_short">Info</string>
+    <string name="player_book_short">Book</string>
 
-    <string name="sleep_timer">Sleep timer</string>
-    <string name="sleep_minutes_option">%1$d minutes</string>
     <string name="sleep_end_of_chapter">End of current chapter</string>
     <string name="sleep_end_of_chapter_short">Chapter end</string>
-    <string name="sleep_cancel">Cancel timer</string>
+    <string name="sleep_minutes_compact">%1$dm</string>
+    <string name="sleep_minutes_short">%1$d min</string>
+    <string name="sleep_hours_exact">%1$dh</string>
+    <string name="sleep_hours_minutes">%1$dh %2$dm</string>
 
-    <string name="settings_title">Settings</string>
-    <string name="settings_folder_section">Library folder</string>
+    <string name="settings_title">Global settings</string>
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_theme_system">System</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_accent_color">Accent color</string>
+    <string name="accent_amber">Amber</string>
+    <string name="accent_teal">Ocean</string>
+    <string name="accent_indigo">Indigo</string>
+    <string name="accent_green">Forest</string>
+    <string name="accent_coral">Coral</string>
+    <string name="accent_violet">Violet</string>
+
+    <string name="settings_playback_section">Playback</string>
+    <string name="settings_audio_normalization">Normalize volume</string>
+    <string name="settings_mono_audio">Mono audio</string>
+    <string name="settings_mono_mode">Mono mode</string>
+    <string name="mono_mode_off">Off</string>
+    <string name="mono_mode_mix">L+R</string>
+    <string name="mono_mode_smart">Smart</string>
+    <string name="mono_mode_left">L</string>
+    <string name="mono_mode_right">R</string>
+    <string name="mono_mode_left_short">Mono L</string>
+    <string name="mono_mode_right_short">Mono R</string>
+    <string name="mono_mode_info">L+R: mixes left and right evenly. Smart: smoothly follows the louder channel and avoids phase cancellation. L / R: plays only the left or right channel on both ears to fix broken recordings.</string>
+    <string name="settings_smart_rewind">Smart rewind after pause</string>
+    <string name="seconds_short">%1$ds</string>
+    <string name="settings_bt_seek">Headphone skip buttons</string>
+    <string name="settings_bt_seek_short">-10s / +30s</string>
+    <string name="settings_bt_chapter_short">Prev / Next</string>
+
+    <string name="settings_folder_section">Library</string>
+    <string name="settings_local_folder_rw">Connected (read &amp; delete enabled)</string>
+    <string name="settings_local_folder_ro">Connected (read-only)</string>
+    <string name="settings_local_folder_none">No folder selected</string>
+    <string name="settings_show_refresh_button">Show refresh button</string>
+    <string name="settings_show_search_bar">Show search bar</string>
     <string name="settings_online_lookup">Allow online metadata lookup</string>
     <string name="settings_online_lookup_desc">Search iTunes &amp; Open Library on demand and save info.txt + cover.jpg locally.</string>
+
     <string name="settings_trash_section">Trash &amp; auto-cleanup</string>
     <string name="settings_trash_retention">Keep items in trash for</string>
-    <string name="retention_immediate">0h (immediate)</string>
+    <string name="retention_immediate">0h</string>
     <string name="retention_24h">24h</string>
     <string name="retention_48h">48h</string>
     <string name="retention_72h">72h</string>
     <string name="settings_auto_trash_finished">Auto-move finished books to trash</string>
-    <string name="auto_trash_never">Never</string>
+    <string name="settings_auto_trash_delay">Move after</string>
     <string name="auto_trash_immediate">Immediately</string>
     <string name="auto_trash_2d">After 2 days</string>
     <string name="auto_trash_7d">After 7 days</string>
 
-    <string name="settings_playback_section">Playback</string>
-    <string name="settings_audio_normalization">Audio normalization</string>
-    <string name="settings_bt_seek">Bluetooth Next/Prev seeks (-10s/+30s)</string>
-    <string name="settings_smart_rewind">Smart rewind after pause</string>
-    <string name="off">Off</string>
-    <string name="settings_language">Language</string>
+    <string name="settings_section_language_backup">Language &amp; Backup</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_language_de">Deutsch</string>
+    <string name="settings_backup_title">Backup</string>
     <string name="backup_export">Export backup</string>
     <string name="backup_import">Import backup</string>
     <string name="backup_exported">Backup exported</string>
     <string name="backup_imported">Restored %1$d audiobooks</string>
     <string name="backup_import_failed">Could not import backup</string>
+    <string name="settings_version_format">PureAudiobooks v%1$s (Build %2$d)</string>
+
+    <string name="audiobook_settings_title">Audiobook settings</string>
+    <string name="audiobook_settings_section_audio">Audio &amp; Playback</string>
+    <string name="audiobook_settings_section_library">Library &amp; Status</string>
+    <string name="override_global">Global</string>
+    <string name="override_off">Off</string>
+    <string name="override_on">On</string>
+    <string name="override_global_state">Global: %1$s</string>
+
+    <string name="player_audio_fix_title">Mono / Audio-Fix</string>
+    <string name="player_scope_chapter">This chapter</string>
+    <string name="player_scope_book">This audiobook</string>
+    <string name="player_audio_fix_inherited">Inherited: %1$s</string>
+    <string name="player_audio_fix_active_chapter">Active for this chapter</string>
+    <string name="player_audio_fix_active_book">Active for this audiobook</string>
+    <string name="action_reset">Reset</string>
 
     <string name="snackbar_book_hidden">Audiobook hidden</string>
     <string name="action_undo">Undo</string>
-    <string name="player_silence">Silence</string>
+    <string name="state_on">On</string>
+    <string name="state_off">Off</string>
+    <string name="off">Off</string>
     <string name="save">Save</string>
     <string name="cancel">Cancel</string>
     <string name="close">Close</string>

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.lycoslane.pureaudiobooks.PureAudiobooksApplication
 import com.lycoslane.pureaudiobooks.core.database.AudiobookWithTracks
 import com.lycoslane.pureaudiobooks.core.preferences.AppSettings
+import com.lycoslane.pureaudiobooks.ui.common.Formatters
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -53,6 +54,12 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     fun setLocalFolderUriAndScan(uri: String) {
         preferences.setLocalFolderUri(uri)
         scanFolder()
+    }
+
+    fun playOrToggleBook(item: AudiobookWithTracks) {
+        val tracks = Formatters.sortedTracks(item.tracks)
+        if (tracks.isEmpty()) return
+        app.playerController.playAudiobook(item.audiobook, tracks)
     }
 
     fun moveToTrash(bookId: Long) {

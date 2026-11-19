@@ -37,9 +37,9 @@ import com.lycoslane.pureaudiobooks.PureAudiobooksApplication
 import com.lycoslane.pureaudiobooks.R
 import com.lycoslane.pureaudiobooks.ui.detail.BookDetailScreen
 import com.lycoslane.pureaudiobooks.ui.home.HomeScreen
-import com.lycoslane.pureaudiobooks.ui.home.SettingsSheet
 import com.lycoslane.pureaudiobooks.ui.player.FullPlayerSheet
 import com.lycoslane.pureaudiobooks.ui.player.MiniPlayer
+import com.lycoslane.pureaudiobooks.ui.settings.SettingsScreen
 import com.lycoslane.pureaudiobooks.ui.viewmodel.BookDetailViewModel
 import com.lycoslane.pureaudiobooks.ui.viewmodel.LibraryViewModel
 import kotlinx.coroutines.launch
@@ -64,7 +64,6 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
     val playerState by app.playerController.state.collectAsStateWithLifecycle()
 
     var showFullPlayer by rememberSaveable { mutableStateOf(false) }
-    var showSettings by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(playerState.currentTrack?.id) {
         if (playerState.currentTrack == null) {
@@ -131,20 +130,23 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
     }
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
     val currentDetailBookId = navBackStackEntry?.arguments?.getLong("bookId")
-    val isViewingCurrentBookDetail = navBackStackEntry?.destination?.route?.startsWith("detail/") == true &&
+    val isViewingCurrentBookDetail = currentRoute?.startsWith("detail/") == true &&
         currentDetailBookId != null &&
         currentDetailBookId == playerState.currentBook?.id
+    val hideMiniPlayer = currentRoute == "settings" || isViewingCurrentBookDetail
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             Column {
-                if (playerState.currentTrack != null && !isViewingCurrentBookDetail) {
+                if (playerState.currentTrack != null && !hideMiniPlayer) {
                     MiniPlayer(
                         state = playerState,
                         onTogglePlayPause = { app.playerController.togglePlayPause() },
+                        onForward30 = { app.playerController.seekBy(30_000L) },
                         onExpand = { showFullPlayer = true }
                     )
                 }
@@ -164,16 +166,22 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     trashedBooks = trashedBooks,
                     hasFolderConfigured = settings.localFolderUri.isNotBlank(),
                     gridLayout = settings.gridLayout,
+                    showRefreshButton = settings.showRefreshButton,
+                    showSearchBar = settings.showSearchBar,
                     isScanning = isScanning,
                     activeTrackId = playerState.currentTrack?.id,
                     activePositionMs = playerState.positionMs,
+                    isPlaying = playerState.isPlaying,
                     onToggleLayout = { libraryViewModel.preferences.setGridLayout(!settings.gridLayout) },
                     onScan = { libraryViewModel.scanFolder() },
                     onPickFolder = { folderPickerLauncher.launch(null) },
-                    onOpenSettings = { showSettings = true },
+                    onOpenSettings = {
+                        navController.navigate("settings") { launchSingleTop = true }
+                    },
                     onOpenBook = { bookId ->
                         navController.navigate("detail/$bookId") { launchSingleTop = true }
                     },
+                    onPlayBook = { item -> libraryViewModel.playOrToggleBook(item) },
                     onMarkFinished = { bookId, finished -> libraryViewModel.markBookFinished(bookId, finished) },
                     onResetProgress = { bookId -> libraryViewModel.resetBookProgress(bookId) },
                     onSetHidden = { bookId, hidden ->
@@ -195,6 +203,36 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     onMoveToTrash = { bookId -> libraryViewModel.moveToTrash(bookId) },
                     onRestoreFromTrash = { bookId -> libraryViewModel.restoreFromTrash(bookId) },
                     onPermanentlyDelete = { bookId -> libraryViewModel.permanentlyDelete(bookId) }
+                )
+            }
+
+            composable("settings") {
+                SettingsScreen(
+                    settings = settings,
+                    onBack = { navController.popBackStack() },
+                    onChangeThemeMode = { libraryViewModel.preferences.setThemeMode(it) },
+                    onChangeLightAccent = { libraryViewModel.preferences.setLightAccent(it) },
+                    onChangeDarkAccent = { libraryViewModel.preferences.setDarkAccent(it) },
+                    onToggleAudioNormalization = { libraryViewModel.preferences.setAudioNormalizationEnabled(it) },
+                    onChangeMonoMode = { libraryViewModel.preferences.setMonoMode(it) },
+                    onChangeSmartRewind = { libraryViewModel.preferences.setSmartRewindSeconds(it) },
+                    onChangeBluetoothNextPrevSeeks = { libraryViewModel.preferences.setBluetoothNextPrevSeeks(it) },
+                    onPickFolder = { folderPickerLauncher.launch(null) },
+                    onRescanFolder = {
+                        navController.popBackStack()
+                        libraryViewModel.scanFolder()
+                    },
+                    onToggleShowRefreshButton = { libraryViewModel.preferences.setShowRefreshButton(it) },
+                    onToggleShowSearchBar = { libraryViewModel.preferences.setShowSearchBar(it) },
+                    onToggleOnlineLookup = { libraryViewModel.preferences.setOnlineLookupEnabled(it) },
+                    onChangeTrashRetentionHours = { libraryViewModel.preferences.setTrashRetentionHours(it) },
+                    onChangeAutoTrashFinishedDays = { libraryViewModel.preferences.setAutoMoveFinishedToTrashDays(it) },
+                    onChangeAppLanguage = { lang ->
+                        libraryViewModel.preferences.setAppLanguage(lang)
+                        (context as? Activity)?.recreate()
+                    },
+                    onExportBackup = { exportBackupLauncher.launch("pureaudiobooks-backup.json") },
+                    onImportBackup = { importBackupLauncher.launch(arrayOf("application/json", "*/*")) }
                 )
             }
 
@@ -220,6 +258,8 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                 BookDetailScreen(
                     data = bookData,
                     bookmarks = bookmarks,
+                    globalMonoMode = settings.monoMode,
+                    globalAudioNormalization = settings.audioNormalizationEnabled,
                     onlineLookupEnabled = settings.onlineLookupEnabled,
                     onlineResults = onlineResults,
                     isSearchingOnline = isSearchingOnline,
@@ -230,11 +270,13 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     onSeekTo = { app.playerController.seekTo(it) },
                     onSeekBy = { app.playerController.seekBy(it) },
                     onSkipTrack = { app.playerController.skipTrack(it) },
-                    onSpeedChange = { app.playerController.setPlaybackSpeed(it) },
-                    onSilenceChange = { enabled, intensity -> app.playerController.setSkipSilence(enabled, intensity) },
+                    onSpeedChange = { detailViewModel.setPlaybackSpeed(it) },
+                    onSilenceChange = { enabled, intensity -> detailViewModel.setSkipSilence(enabled, intensity) },
+                    onSetTrackMonoOverride = { trackId, mode -> detailViewModel.setTrackMonoOverride(trackId, mode) },
+                    onSetBookMonoOverride = { mode -> detailViewModel.setBookMonoOverride(mode) },
+                    onSetBookNormalizationOverride = { ov -> detailViewModel.setBookNormalizationOverride(ov) },
                     onSleepMinutes = { app.playerController.startSleepTimerMinutes(it) },
                     onSleepEndOfTrack = { app.playerController.setSleepAtEndOfTrack(it) },
-                    onCancelSleep = { app.playerController.cancelSleepTimer() },
                     onAddBookmark = { track, posMs, note ->
                         scope.launch {
                             app.repository.addBookmark(bookId, track, posMs, note)
@@ -246,7 +288,20 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     onResetProgress = { detailViewModel.resetBookProgress() },
                     onSetHidden = { hidden ->
                         detailViewModel.setBookHidden(hidden)
-                        if (hidden) navController.popBackStack()
+                        if (hidden) {
+                            navController.popBackStack()
+                            scope.launch {
+                                snackbarHostState.currentSnackbarData?.dismiss()
+                                val result = snackbarHostState.showSnackbar(
+                                    message = context.getString(R.string.snackbar_book_hidden),
+                                    actionLabel = context.getString(R.string.action_undo),
+                                    duration = SnackbarDuration.Short
+                                )
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    libraryViewModel.setBookHidden(bookId, false)
+                                }
+                            }
+                        }
                     },
                     onMoveToTrash = {
                         libraryViewModel.moveToTrash(bookId)
@@ -279,18 +334,69 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
     }
 
     if (showFullPlayer && playerState.currentTrack != null) {
+        val activeBook = playerState.currentBook
+        val activeTrack = playerState.currentTrack
         FullPlayerSheet(
             state = playerState,
+            globalMonoMode = settings.monoMode,
+            globalAudioNormalization = settings.audioNormalizationEnabled,
             onDismiss = { showFullPlayer = false },
             onTogglePlayPause = { app.playerController.togglePlayPause() },
             onSeekTo = { app.playerController.seekTo(it) },
             onSeekBy = { app.playerController.seekBy(it) },
             onSkipTrack = { app.playerController.skipTrack(it) },
+            onPlayTrack = { chosen ->
+                if (activeBook != null) {
+                    app.playerController.playAudiobook(activeBook, playerState.bookTracks, chosen)
+                }
+            },
+            onToggleTrackFinished = { tid, finished ->
+                scope.launch {
+                    app.repository.setTrackFinished(tid, finished)
+                    if (activeBook != null) {
+                        app.playerController.refreshCurrentBookMetadata(activeBook.id)
+                    }
+                }
+            },
             onSpeedChange = { app.playerController.setPlaybackSpeed(it) },
             onSilenceChange = { enabled, intensity -> app.playerController.setSkipSilence(enabled, intensity) },
             onSleepMinutes = { app.playerController.startSleepTimerMinutes(it) },
             onSleepEndOfTrack = { app.playerController.setSleepAtEndOfTrack(it) },
-            onCancelSleep = { app.playerController.cancelSleepTimer() },
+            onSetTrackMonoOverride = { mode ->
+                if (activeTrack != null) {
+                    app.playerController.setTrackMonoOverride(activeTrack.id, mode)
+                }
+            },
+            onSetBookMonoOverride = { mode ->
+                if (activeBook != null) {
+                    app.playerController.setBookMonoOverride(activeBook.id, mode)
+                }
+            },
+            onSetBookNormalizationOverride = { ov ->
+                if (activeBook != null) {
+                    app.playerController.setBookNormalizationOverride(activeBook.id, ov)
+                }
+            },
+            onSetBookHidden = { hidden ->
+                if (activeBook != null) {
+                    libraryViewModel.setBookHidden(activeBook.id, hidden)
+                }
+            },
+            onMarkBookFinished = { finished ->
+                if (activeBook != null) {
+                    libraryViewModel.markBookFinished(activeBook.id, finished)
+                }
+            },
+            onResetBookProgress = {
+                if (activeBook != null) {
+                    libraryViewModel.resetBookProgress(activeBook.id)
+                }
+            },
+            onMoveBookToTrash = {
+                if (activeBook != null) {
+                    libraryViewModel.moveToTrash(activeBook.id)
+                }
+            },
             onAddBookmark = { note ->
                 val book = playerState.currentBook ?: return@FullPlayerSheet
                 val track = playerState.currentTrack ?: return@FullPlayerSheet
@@ -299,25 +405,6 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     snackbarHostState.showSnackbar(context.getString(R.string.bookmark_saved))
                 }
             }
-        )
-    }
-
-    if (showSettings) {
-        SettingsSheet(
-            settings = settings,
-            preferences = libraryViewModel.preferences,
-            onPickFolder = { folderPickerLauncher.launch(null) },
-            onRescanFolder = {
-                showSettings = false
-                libraryViewModel.scanFolder()
-            },
-            onExportBackup = { exportBackupLauncher.launch("pureaudiobooks-backup.json") },
-            onImportBackup = { importBackupLauncher.launch(arrayOf("application/json", "*/*")) },
-            onLanguageChanged = { lang ->
-                libraryViewModel.preferences.setAppLanguage(lang)
-                (context as? Activity)?.recreate()
-            },
-            onDismiss = { showSettings = false }
         )
     }
 }

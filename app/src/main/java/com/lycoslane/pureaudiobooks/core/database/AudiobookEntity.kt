@@ -3,6 +3,8 @@ package com.lycoslane.pureaudiobooks.core.database
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.lycoslane.pureaudiobooks.core.audio.AudioMonoMode
+import com.lycoslane.pureaudiobooks.core.audio.AudioOverride
 
 @Entity(
     tableName = "audiobooks",
@@ -27,6 +29,8 @@ data class AudiobookEntity(
     val playbackSpeed: Float = 1.0f,
     val skipSilence: Boolean = false,
     val silenceIntensity: Int = 1,
+    val monoModeOverride: Int = AudioMonoMode.INHERIT,
+    val audioNormalizationOverride: Int = AudioOverride.INHERIT,
     val hasTagConflict: Boolean = false,
     val conflictSummaryJson: String = "",
     val metadataLockedByUser: Boolean = false,

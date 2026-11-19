@@ -48,6 +48,10 @@ interface PureAudiobooksDao {
     @Query("SELECT * FROM audiobooks ORDER BY id ASC")
     suspend fun getAllAudiobooksOnce(): List<AudiobookEntity>
 
+    @Transaction
+    @Query("SELECT * FROM audiobooks WHERE deletedAtMs IS NULL AND isHidden = 0 AND isFinished = 0 AND lastPlayedAtMs > 0 ORDER BY lastPlayedAtMs DESC LIMIT 1")
+    suspend fun getMostRecentInProgressAudiobook(): AudiobookWithTracks?
+
     @Query("SELECT * FROM audiobooks WHERE id = :audiobookId")
     suspend fun getAudiobook(audiobookId: Long): AudiobookEntity?
 
@@ -125,6 +129,15 @@ interface PureAudiobooksDao {
 
     @Query("UPDATE audiobooks SET skipSilence = :enabled, silenceIntensity = :intensity WHERE id = :audiobookId")
     suspend fun updateSkipSilence(audiobookId: Long, enabled: Boolean, intensity: Int)
+
+    @Query("UPDATE audiobooks SET monoModeOverride = :mode WHERE id = :audiobookId")
+    suspend fun setBookMonoModeOverride(audiobookId: Long, mode: Int)
+
+    @Query("UPDATE audiobooks SET audioNormalizationOverride = :override WHERE id = :audiobookId")
+    suspend fun setBookAudioNormalizationOverride(audiobookId: Long, override: Int)
+
+    @Query("UPDATE chapter_tracks SET monoModeOverride = :mode WHERE id = :trackId")
+    suspend fun setTrackMonoModeOverride(trackId: Long, mode: Int)
 
     @Query("UPDATE audiobooks SET lastPlayedAtMs = :timestampMs WHERE id = :audiobookId")
     suspend fun updateLastPlayed(audiobookId: Long, timestampMs: Long)

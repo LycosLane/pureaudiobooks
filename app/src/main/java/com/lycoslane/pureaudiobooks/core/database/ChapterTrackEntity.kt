@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.lycoslane.pureaudiobooks.core.audio.AudioMonoMode
 
 @Entity(
     tableName = "chapter_tracks",
@@ -35,5 +36,6 @@ data class ChapterTrackEntity(
     val positionMs: Long = 0L,
     val isFinished: Boolean = false,
     val fileSizeBytes: Long = 0L,
-    val lastModifiedMs: Long = 0L
+    val lastModifiedMs: Long = 0L,
+    val monoModeOverride: Int = AudioMonoMode.INHERIT
 )

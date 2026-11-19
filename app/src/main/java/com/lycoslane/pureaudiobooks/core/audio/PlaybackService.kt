@@ -59,9 +59,13 @@ class PlaybackService : MediaSessionService() {
     private var dynamicsProcessing: DynamicsProcessing? = null
     private var currentAudioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
     private var attachedAudioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
+    private var currentEffectiveNormalization: Boolean = false
 
     @Volatile
     private var sleepAtEndOfTrack: Boolean = false
+
+    @OptIn(UnstableApi::class)
+    private lateinit var monoProcessor: MonoMixAudioProcessor
 
     @OptIn(UnstableApi::class)
     private lateinit var silenceProcessor: DelegatingSilenceAudioProcessor
@@ -69,6 +73,7 @@ class PlaybackService : MediaSessionService() {
     @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
+        monoProcessor = MonoMixAudioProcessor()
         silenceProcessor = DelegatingSilenceAudioProcessor()
 
         val renderersFactory = object : DefaultRenderersFactory(this) {
@@ -80,7 +85,7 @@ class PlaybackService : MediaSessionService() {
                 return DefaultAudioSink.Builder(context)
                     .setEnableFloatOutput(enableFloatOutput)
                     .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                    .setAudioProcessors(arrayOf(silenceProcessor))
+                    .setAudioProcessors(arrayOf(monoProcessor, silenceProcessor))
                     .build()
             }
         }
@@ -101,9 +106,9 @@ class PlaybackService : MediaSessionService() {
         val app = applicationContext as PureAudiobooksApplication
         serviceScope.launch {
             app.preferences.settings
-                .map { it.audioNormalizationEnabled }
+                .map { it.audioNormalizationEnabled to it.monoMode }
                 .distinctUntilChanged()
-                .collect { enabled -> applyAudioNormalization(enabled) }
+                .collect { resolveAndApplyCurrentAudioSettings() }
         }
 
         val smartRewindPlayer = object : ForwardingPlayer(player) {
@@ -167,7 +172,7 @@ class PlaybackService : MediaSessionService() {
         player.addListener(object : Player.Listener {
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 currentAudioSessionId = audioSessionId
-                applyAudioNormalization(app.preferences.settings.value.audioNormalizationEnabled)
+                applyAudioNormalization(currentEffectiveNormalization)
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -210,8 +215,8 @@ class PlaybackService : MediaSessionService() {
                                 playTrackDirect(nextTrack.id, resumeWithRewind = false)
                             }
                         } else if (nextTrack == null) {
-                            // Whole audiobook finished!
                             dao.setAudiobookFinished(track.audiobookId, true, now)
+                            lastTrackPrefs().edit().remove(KEY_LAST_TRACK_ID).apply()
                             val autoTrashDays = app.preferences.settings.value.autoMoveFinishedToTrashDays
                             if (autoTrashDays == 0) {
                                 dao.setDeletedAt(track.audiobookId, now)
@@ -250,6 +255,7 @@ class PlaybackService : MediaSessionService() {
                         val sessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
                             .buildUpon()
                             .add(SessionCommand(CMD_SET_SKIP_SILENCE, Bundle.EMPTY))
+                            .add(SessionCommand(CMD_SET_MONO_MODE, Bundle.EMPTY))
                             .add(SessionCommand(CMD_SET_AUDIO_NORMALIZATION, Bundle.EMPTY))
                             .add(SessionCommand(CMD_SKIP_BOOK_TRACK_NEXT, Bundle.EMPTY))
                             .add(SessionCommand(CMD_SKIP_BOOK_TRACK_PREV, Bundle.EMPTY))
@@ -274,18 +280,35 @@ class PlaybackService : MediaSessionService() {
                             val withBook = if (id < 0) null else withContext(Dispatchers.IO) {
                                 PureAudiobooksDatabase.getInstance(applicationContext).dao().getTrackWithAudiobook(id)
                             }
-                            val item = withBook?.let { buildMediaItem(it.track, it.audiobook) }
-                            if (item == null || withBook == null) {
+                            if (withBook == null) {
+                                future.setException(UnsupportedOperationException("Nothing to resume"))
+                                return@launch
+                            }
+                            val item = buildMediaItem(withBook.track, withBook.audiobook)
+                            if (item == null) {
                                 future.setException(UnsupportedOperationException("Nothing to resume"))
                             } else {
+                                val globalSettings = app.preferences.settings.value
+                                val effectiveMono = AudioMonoMode.resolveEffective(
+                                    globalMonoMode = globalSettings.monoMode,
+                                    bookMonoOverride = withBook.audiobook.monoModeOverride,
+                                    trackMonoOverride = withBook.track.monoModeOverride
+                                )
+                                val effectiveNorm = AudioOverride.resolve(
+                                    globalEnabled = globalSettings.audioNormalizationEnabled,
+                                    bookOverride = withBook.audiobook.audioNormalizationOverride
+                                )
                                 withContext(Dispatchers.Main) {
                                     player.playbackParameters = PlaybackParameters(
-                                        withBook.audiobook.playbackSpeed.coerceIn(0.75f, 3.0f)
+                                        withBook.audiobook.playbackSpeed.coerceIn(0.50f, 3.00f)
                                     )
                                     updateSilenceProcessors(
                                         withBook.audiobook.skipSilence,
                                         withBook.audiobook.silenceIntensity
                                     )
+                                    monoProcessor.setMode(effectiveMono)
+                                    currentEffectiveNormalization = effectiveNorm
+                                    applyAudioNormalization(effectiveNorm)
                                 }
                                 future.set(
                                     MediaSession.MediaItemsWithStartPosition(
@@ -314,8 +337,14 @@ class PlaybackService : MediaSessionService() {
                                 updateSilenceProcessors(enabled, intensity)
                                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
+                            CMD_SET_MONO_MODE -> {
+                                val mode = AudioMonoMode.normalizeConcrete(args.getInt(ARG_MONO_MODE, AudioMonoMode.OFF))
+                                monoProcessor.setMode(mode)
+                                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                            }
                             CMD_SET_AUDIO_NORMALIZATION -> {
                                 val enabled = args.getBoolean(ARG_AUDIO_NORMALIZATION, false)
+                                currentEffectiveNormalization = enabled
                                 applyAudioNormalization(enabled)
                                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                             }
@@ -342,6 +371,45 @@ class PlaybackService : MediaSessionService() {
     @OptIn(UnstableApi::class)
     private fun updateSilenceProcessors(enabled: Boolean, intensity: Int) {
         silenceProcessor.setMode(enabled, intensity)
+    }
+
+    private fun resolveAndApplyCurrentAudioSettings() {
+        val app = applicationContext as PureAudiobooksApplication
+        val global = app.preferences.settings.value
+        val trackId = player.currentMediaItem?.mediaId?.toLongOrNull()
+        if (trackId == null) {
+            monoProcessor.setMode(global.monoMode)
+            currentEffectiveNormalization = global.audioNormalizationEnabled
+            applyAudioNormalization(currentEffectiveNormalization)
+            return
+        }
+        serviceScope.launch {
+            val pair = withContext(Dispatchers.IO) {
+                PureAudiobooksDatabase.getInstance(applicationContext).dao().getTrackWithAudiobook(trackId)
+            }
+            if (player.currentMediaItem?.mediaId?.toLongOrNull() != trackId) return@launch
+            val currentGlobal = app.preferences.settings.value
+            val effectiveMono = if (pair != null) {
+                AudioMonoMode.resolveEffective(
+                    globalMonoMode = currentGlobal.monoMode,
+                    bookMonoOverride = pair.audiobook.monoModeOverride,
+                    trackMonoOverride = pair.track.monoModeOverride
+                )
+            } else {
+                AudioMonoMode.normalizeConcrete(currentGlobal.monoMode)
+            }
+            val effectiveNorm = if (pair != null) {
+                AudioOverride.resolve(
+                    globalEnabled = currentGlobal.audioNormalizationEnabled,
+                    bookOverride = pair.audiobook.audioNormalizationOverride
+                )
+            } else {
+                currentGlobal.audioNormalizationEnabled
+            }
+            monoProcessor.setMode(effectiveMono)
+            currentEffectiveNormalization = effectiveNorm
+            applyAudioNormalization(effectiveNorm)
+        }
     }
 
     private fun releaseDynamicsProcessing() {
@@ -422,19 +490,32 @@ class PlaybackService : MediaSessionService() {
             val dao = PureAudiobooksDatabase.getInstance(applicationContext).dao()
             val pair = withContext(Dispatchers.IO) { dao.getTrackWithAudiobook(trackId) } ?: return@launch
             val item = buildMediaItem(pair.track, pair.audiobook) ?: return@launch
+            val globalSettings = (applicationContext as PureAudiobooksApplication).preferences.settings.value
             val rewindMs = if (resumeWithRewind && pair.track.positionMs > 0L) {
-                (applicationContext as PureAudiobooksApplication)
-                    .preferences.settings.value.smartRewindSeconds * 1000L
+                globalSettings.smartRewindSeconds * 1000L
             } else {
                 0L
             }
             val startPos = (pair.track.positionMs - rewindMs).coerceAtLeast(0L)
+            val effectiveMono = AudioMonoMode.resolveEffective(
+                globalMonoMode = globalSettings.monoMode,
+                bookMonoOverride = pair.audiobook.monoModeOverride,
+                trackMonoOverride = pair.track.monoModeOverride
+            )
+            val effectiveNorm = AudioOverride.resolve(
+                globalEnabled = globalSettings.audioNormalizationEnabled,
+                bookOverride = pair.audiobook.audioNormalizationOverride
+            )
             lastPausedElapsedMs = 0L
             player.setMediaItem(item, startPos)
-            player.playbackParameters = PlaybackParameters(pair.audiobook.playbackSpeed.coerceIn(0.75f, 3.0f))
+            player.playbackParameters = PlaybackParameters(pair.audiobook.playbackSpeed.coerceIn(0.50f, 3.00f))
             updateSilenceProcessors(pair.audiobook.skipSilence, pair.audiobook.silenceIntensity.coerceIn(0, 2))
+            monoProcessor.setMode(effectiveMono)
+            currentEffectiveNormalization = effectiveNorm
+            applyAudioNormalization(effectiveNorm)
             player.prepare()
             player.play()
+            lastTrackPrefs().edit().putLong(KEY_LAST_TRACK_ID, pair.track.id).apply()
             withContext(Dispatchers.IO) {
                 dao.updateLastTrack(pair.audiobook.id, pair.track.id, System.currentTimeMillis())
             }
@@ -543,6 +624,8 @@ class PlaybackService : MediaSessionService() {
         const val CMD_SET_SKIP_SILENCE = "com.lycoslane.pureaudiobooks.SET_SKIP_SILENCE"
         const val ARG_SKIP_SILENCE = "skip_silence"
         const val ARG_SILENCE_INTENSITY = "silence_intensity"
+        const val CMD_SET_MONO_MODE = "com.lycoslane.pureaudiobooks.SET_MONO_MODE"
+        const val ARG_MONO_MODE = "mono_mode"
         const val CMD_SET_AUDIO_NORMALIZATION = "com.lycoslane.pureaudiobooks.SET_AUDIO_NORMALIZATION"
         const val ARG_AUDIO_NORMALIZATION = "audio_normalization"
         const val CMD_SKIP_BOOK_TRACK_NEXT = "com.lycoslane.pureaudiobooks.SKIP_BOOK_TRACK_NEXT"
