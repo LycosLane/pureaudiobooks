@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="112" fill="#101216"/>
+  <!-- PureAudiobooks Official Mark (B3-Kompakt, Warm Amber, dy=+14) -->
+  <g transform="rotate(-6 256 256)">
+    <!-- Compact Dual Audio Signal Waves -->
+    <path d="M 352 184 A 52 52 0 0 1 384 240" fill="none" stroke="#FFB020" stroke-width="18" stroke-linecap="round"/>
+    <path d="M 368 150 A 90 90 0 0 1 422 242" fill="none" stroke="#D97706" stroke-width="18" stroke-linecap="round"/>
+
+    <!-- Large White Fedora -->
+    <g transform="translate(246, 232) scale(1.14) translate(-256, -264)">
+      <g stroke="#101216" stroke-width="16" stroke-linejoin="round" fill="#101216">
+        <path d="M 162 252 L 186 162 L 208 150 L 256 196 L 304 150 L 326 162 L 350 252 Q 256 264 162 252 Z"/>
+        <path d="M 86 312 L 150 312 Q 256 326 362 312 L 426 312 C 394 362, 330 384, 256 384 C 182 384, 118 362, 86 312 Z"/>
+      </g>
+      <path d="M 162 252 L 186 162 L 208 150 L 256 196 L 304 150 L 326 162 L 350 252 Q 256 264 162 252 Z" fill="#FFFFFF"/>
+      <path d="M 220 154 L 256 165 L 292 154 L 256 186 Z" fill="#FFFFFF"/>
+      <path d="M 159 264 Q 232 273 300 269 L 305 305 Q 234 310 151 300 Z" fill="#D97706"/>
+      <path d="M 315 268 Q 334 266 353 264 L 361 300 Q 342 303 320 305 Z" fill="#FFB020"/>
+      <path d="M 86 312 L 150 312 Q 256 326 362 312 L 426 312 C 394 362, 330 384, 256 384 C 182 384, 118 362, 86 312 Z" fill="#FFFFFF"/>
+    </g>
+
+    <!-- Foreground Open Book Centered Below Brim (dy=+14) -->
+    <g transform="translate(0, 14)">
+      <path d="M 134 310 Q 192 298 248 322 Q 304 298 362 310 L 354 410 Q 302 398 248 420 Q 194 398 142 410 Z"
+            fill="#101216" stroke="#101216" stroke-width="24" stroke-linejoin="round"/>
+      <path d="M 136 312 Q 190 301 242 322 L 242 414 Q 192 395 144 406 Z" fill="#D97706"/>
+      <path d="M 360 312 Q 306 301 254 322 L 254 414 Q 304 395 352 406 Z" fill="#FFB020"/>
+      <path d="M 150 325 Q 192 315 234 332 L 234 397 Q 192 383 154 391 Z" fill="#FFFFFF" fill-opacity="0.22"/>
+      <path d="M 346 325 Q 304 315 262 332 L 262 397 Q 304 383 342 391 Z" fill="#FFFFFF" fill-opacity="0.28"/>
+    </g>
+  </g>
+</svg>

@@ -148,11 +148,11 @@ fun HomeScreen(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Image(
-                            painter = painterResource(R.mipmap.ic_launcher_foreground),
+                            painter = painterResource(R.drawable.ic_brand_logo),
                             contentDescription = null,
                             modifier = Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(6.dp))
+                                .size(30.dp)
+                                .clip(RoundedCornerShape(7.dp))
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(stringResource(R.string.app_name), fontWeight = FontWeight.SemiBold)
