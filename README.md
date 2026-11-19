@@ -4,7 +4,7 @@
 
 # PureAudiobooks
 
-[![Version: 1.1.1](https://img.shields.io/badge/version-1.1.1-amber.svg)](https://github.com/LycosLane/PureAudiobooks/releases)
+[![Version: 1.1.2](https://img.shields.io/badge/version-1.1.2-amber.svg)](https://github.com/LycosLane/PureAudiobooks/releases)
 [![Platform: Android](https://img.shields.io/badge/Platform-Android%2010%2B-0078D6.svg)](https://github.com/LycosLane/PureAudiobooks)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Zero Telemetry](https://img.shields.io/badge/Telemetry-Zero-brightgreen.svg)]()
@@ -30,7 +30,7 @@
 * **Chapter Batch Actions:** Tap chapters to mark up to a chapter as finished, reset from a chapter onward, or remove listened chapters cleanly.
 
 ### Playback & Audio DSP
-* **Zero-Friction Resume & Larger Mini-Player:** Remembers your last played audiobook across app restarts with a swipe-up mini-player bar to open the full player.
+* **Zero-Friction Resume & Larger Mini-Player:** Remembers your last played audiobook across app restarts with a prominent mini-player bar that opens the full player on tap.
 * **Unified Player Bar:** Fine playback speed (`0.50x` - `3.00x` in `0.02x` steps) with live speed-adjusted remaining time, silence trimming (`Off`, `Soft`, `Medium`, `Strong`), live Stereo / Mono-Fix (`L+R`, `Smart`, `L`, `R`), and a flexible sleep timer (`5` - `120` min or end of chapter).
 * **Symmetric Global & Per-Audiobook Settings:** Configure defaults for speed, silence trimming, volume normalization, Mono audio, and Smart-Rewind after pause globally, override any setting per audiobook with clear `Global` inheritance, expand long-press quick settings into the full sheet, or apply a book's setup to all audiobooks at once.
 * **Bookmarks & Bluetooth:** Save timestamped notes and configure Bluetooth Next/Prev buttons (`-10s` / `+30s` seek or chapter skip).
