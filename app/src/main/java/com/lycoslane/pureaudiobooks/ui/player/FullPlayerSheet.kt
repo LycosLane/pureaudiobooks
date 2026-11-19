@@ -74,6 +74,9 @@ fun FullPlayerSheet(
     onSkipTrack: (Boolean) -> Unit,
     onPlayTrack: (ChapterTrackEntity) -> Unit,
     onToggleTrackFinished: (Long, Boolean) -> Unit,
+    onMarkTracksUpToFinished: (Long) -> Unit,
+    onMarkTracksFromUnfinished: (Long) -> Unit,
+    onDeleteTracksUpTo: (Long) -> Unit,
     onSpeedChange: (Float) -> Unit,
     onSilenceChange: (Boolean, Int) -> Unit,
     onSleepMinutes: (Int) -> Unit,
@@ -351,11 +354,18 @@ fun FullPlayerSheet(
             activeTrackId = track.id,
             fallbackTrackId = book.lastTrackId,
             activePositionMs = state.positionMs,
+            folderUri = book.folderUri,
             onSelectTrack = { chosen ->
                 showChaptersSheet = false
                 onPlayTrack(chosen)
             },
             onToggleTrackFinished = onToggleTrackFinished,
+            onMarkTracksUpToFinished = onMarkTracksUpToFinished,
+            onMarkTracksFromUnfinished = onMarkTracksFromUnfinished,
+            onDeleteTracksUpTo = { tid ->
+                showChaptersSheet = false
+                onDeleteTracksUpTo(tid)
+            },
             onDismiss = { showChaptersSheet = false }
         )
     }

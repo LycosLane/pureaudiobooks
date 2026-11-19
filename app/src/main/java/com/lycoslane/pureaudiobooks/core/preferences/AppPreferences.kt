@@ -1,5 +1,6 @@
 package com.lycoslane.pureaudiobooks.core.preferences
 
+import android.annotation.SuppressLint
 import android.content.Context
 import com.lycoslane.pureaudiobooks.core.audio.AudioMonoMode
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,7 +31,7 @@ class AppPreferences(context: Context) {
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    private val _settings = MutableStateFlow(load())
+    private val _settings = MutableStateFlow(load(context))
     val settings: StateFlow<AppSettings> = _settings.asStateFlow()
 
     private fun normalizeThemeMode(mode: String?): String =
@@ -39,7 +40,7 @@ class AppPreferences(context: Context) {
     private fun normalizeAccent(accent: String?): String =
         if (accent in VALID_ACCENTS) accent!! else DEFAULT_ACCENT
 
-    private fun load(): AppSettings = AppSettings(
+    private fun load(context: Context): AppSettings = AppSettings(
         localFolderUri = prefs.getString(KEY_LOCAL_FOLDER_URI, "") ?: "",
         onlineLookupEnabled = prefs.getBoolean(KEY_ONLINE_LOOKUP_ENABLED, false),
         trashRetentionHours = prefs.getInt(KEY_TRASH_RETENTION_HOURS, 48).let {
@@ -53,7 +54,7 @@ class AppPreferences(context: Context) {
         monoMode = AudioMonoMode.normalizeConcrete(prefs.getInt(KEY_MONO_MODE, AudioMonoMode.OFF)),
         bluetoothNextPrevSeeks = prefs.getBoolean(KEY_BLUETOOTH_NEXT_PREV_SEEKS, true),
         textScale = prefs.getFloat(KEY_TEXT_SCALE, 1.0f).coerceIn(0.8f, 1.8f),
-        appLanguage = prefs.getString(KEY_APP_LANGUAGE, "en") ?: "en",
+        appLanguage = LocaleHelper.getEffectiveLanguage(context),
         gridLayout = prefs.getBoolean(KEY_GRID_LAYOUT, true),
         themeMode = normalizeThemeMode(prefs.getString(KEY_THEME_MODE, THEME_SYSTEM)),
         lightAccent = normalizeAccent(prefs.getString(KEY_LIGHT_ACCENT, DEFAULT_ACCENT)),
@@ -112,9 +113,10 @@ class AppPreferences(context: Context) {
         _settings.update { it.copy(textScale = clamped) }
     }
 
+    @SuppressLint("ApplySharedPref")
     fun setAppLanguage(languageTag: String) {
         val normalized = if (languageTag == "de") "de" else "en"
-        prefs.edit().putString(KEY_APP_LANGUAGE, normalized).apply()
+        prefs.edit().putString(KEY_APP_LANGUAGE, normalized).commit()
         _settings.update { it.copy(appLanguage = normalized) }
     }
 

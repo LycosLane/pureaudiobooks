@@ -49,6 +49,54 @@ class BookDetailViewModel(
         }
     }
 
+    fun markTracksUpToFinished(trackId: Long) {
+        viewModelScope.launch {
+            val data = bookWithTracks.value
+            val activeTrackId = app.playerController.state.value.currentTrack?.id
+            val affectsPlaying = if (data != null && activeTrackId != null) {
+                val sorted = Formatters.sortedTracks(data.tracks)
+                val idx = sorted.indexOfFirst { it.id == trackId }
+                idx >= 0 && sorted.subList(0, idx + 1).any { it.id == activeTrackId }
+            } else false
+            if (affectsPlaying) {
+                app.playerController.stopIfPlayingBook(audiobookId)
+            }
+            repo.markTracksUpToFinished(audiobookId, trackId)
+            if (!affectsPlaying) {
+                app.playerController.refreshCurrentBookMetadata(audiobookId)
+            }
+        }
+    }
+
+    fun markTracksFromUnfinished(trackId: Long) {
+        viewModelScope.launch {
+            repo.markTracksFromUnfinished(audiobookId, trackId)
+            app.playerController.refreshCurrentBookMetadata(audiobookId)
+        }
+    }
+
+    fun deleteTracksUpTo(trackId: Long, onBookRemoved: () -> Unit) {
+        viewModelScope.launch {
+            val data = bookWithTracks.value
+            val activeTrackId = app.playerController.state.value.currentTrack?.id
+            val affectsPlaying = if (data != null && activeTrackId != null) {
+                val sorted = Formatters.sortedTracks(data.tracks)
+                val idx = sorted.indexOfFirst { it.id == trackId }
+                idx >= 0 && sorted.subList(0, idx + 1).any { it.id == activeTrackId }
+            } else false
+            if (affectsPlaying) {
+                app.playerController.stopIfPlayingBook(audiobookId)
+            }
+            val removedBook = repo.deleteTracksUpTo(audiobookId, trackId)
+            if (removedBook) {
+                app.playerController.stopIfPlayingBook(audiobookId)
+                onBookRemoved()
+            } else {
+                app.playerController.refreshCurrentBookMetadata(audiobookId)
+            }
+        }
+    }
+
     fun markBookFinished(finished: Boolean) {
         viewModelScope.launch {
             if (finished) app.playerController.stopIfPlayingBook(audiobookId)

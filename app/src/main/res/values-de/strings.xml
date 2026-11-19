@@ -174,8 +174,25 @@
     <string name="settings_version_format">PureAudiobooks v%1$s (Build %2$d)</string>
 
     <string name="audiobook_settings_title">Hörbuch-Einstellungen</string>
+    <string name="audiobook_settings_section_metadata">Metadaten &amp; Cover</string>
+    <string name="edit_metadata_and_cover">Metadaten &amp; Cover bearbeiten</string>
     <string name="audiobook_settings_section_audio">Audio &amp; Wiedergabe</string>
     <string name="audiobook_settings_section_library">Bibliothek &amp; Status</string>
+    <string name="tab_chapters">Kapitel (%1$d)</string>
+    <string name="tab_bookmarks">Lesezeichen (%1$d)</string>
+    <string name="tab_info">Info</string>
+    <string name="empty_bookmarks">Noch keine Lesezeichen.</string>
+
+    <string name="chapter_action_play">Kapitel abspielen</string>
+    <string name="chapter_action_mark_up_to">Kapitel 1-%1$d als gehört markieren</string>
+    <string name="chapter_action_mark_from_unfinished">Ab Kapitel %1$d als ungehört markieren</string>
+    <string name="chapter_action_mark_finished_single">Dieses Kapitel als gehört markieren</string>
+    <string name="chapter_action_mark_unfinished_single">Dieses Kapitel als ungehört markieren</string>
+    <string name="chapter_action_delete_up_to">Kapitel 1-%1$d löschen</string>
+    <string name="chapter_delete_confirm_title">%1$d Kapitel löschen?</string>
+    <string name="chapter_delete_confirm_rw">Dadurch werden Kapitel 1-%1$d aus dem Hörbuch entfernt und die zugehörigen lokalen Audiodateien gelöscht.</string>
+    <string name="chapter_delete_confirm_ro">Dadurch werden Kapitel 1-%1$d aus der App entfernt. Die lokalen Audiodateien bleiben unverändert (nur Lesezugriff).</string>
+    <string name="chapter_delete_all_warning">Hinweis: Es sind alle Kapitel dieses Hörbuchs ausgewählt, daher wird der Hörbuch-Eintrag entfernt.</string>
     <string name="override_global">Global</string>
     <string name="override_off">Aus</string>
     <string name="override_on">An</string>

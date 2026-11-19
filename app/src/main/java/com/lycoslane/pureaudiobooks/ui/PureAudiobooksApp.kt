@@ -228,8 +228,10 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     onChangeTrashRetentionHours = { libraryViewModel.preferences.setTrashRetentionHours(it) },
                     onChangeAutoTrashFinishedDays = { libraryViewModel.preferences.setAutoMoveFinishedToTrashDays(it) },
                     onChangeAppLanguage = { lang ->
-                        libraryViewModel.preferences.setAppLanguage(lang)
-                        (context as? Activity)?.recreate()
+                        if (lang != settings.appLanguage) {
+                            libraryViewModel.preferences.setAppLanguage(lang)
+                            (context as? Activity)?.recreate()
+                        }
                     },
                     onExportBackup = { exportBackupLauncher.launch("pureaudiobooks-backup.json") },
                     onImportBackup = { importBackupLauncher.launch(arrayOf("application/json", "*/*")) }
@@ -284,6 +286,13 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                         }
                     },
                     onToggleTrackFinished = { tid, finished -> detailViewModel.setTrackFinished(tid, finished) },
+                    onMarkTracksUpToFinished = { tid -> detailViewModel.markTracksUpToFinished(tid) },
+                    onMarkTracksFromUnfinished = { tid -> detailViewModel.markTracksFromUnfinished(tid) },
+                    onDeleteTracksUpTo = { tid ->
+                        detailViewModel.deleteTracksUpTo(tid) {
+                            navController.popBackStack()
+                        }
+                    },
                     onMarkBookFinished = { finished -> detailViewModel.markBookFinished(finished) },
                     onResetProgress = { detailViewModel.resetBookProgress() },
                     onSetHidden = { hidden ->
@@ -355,6 +364,42 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     app.repository.setTrackFinished(tid, finished)
                     if (activeBook != null) {
                         app.playerController.refreshCurrentBookMetadata(activeBook.id)
+                    }
+                }
+            },
+            onMarkTracksUpToFinished = { tid ->
+                if (activeBook != null) {
+                    scope.launch {
+                        val idx = playerState.bookTracks.indexOfFirst { it.id == tid }
+                        val affectsPlaying = activeTrack != null && idx >= 0 &&
+                            playerState.bookTracks.subList(0, idx + 1).any { it.id == activeTrack.id }
+                        if (affectsPlaying) app.playerController.stopIfPlayingBook(activeBook.id)
+                        app.repository.markTracksUpToFinished(activeBook.id, tid)
+                        if (!affectsPlaying) app.playerController.refreshCurrentBookMetadata(activeBook.id)
+                    }
+                }
+            },
+            onMarkTracksFromUnfinished = { tid ->
+                if (activeBook != null) {
+                    scope.launch {
+                        app.repository.markTracksFromUnfinished(activeBook.id, tid)
+                        app.playerController.refreshCurrentBookMetadata(activeBook.id)
+                    }
+                }
+            },
+            onDeleteTracksUpTo = { tid ->
+                if (activeBook != null) {
+                    scope.launch {
+                        val idx = playerState.bookTracks.indexOfFirst { it.id == tid }
+                        val affectsPlaying = activeTrack != null && idx >= 0 &&
+                            playerState.bookTracks.subList(0, idx + 1).any { it.id == activeTrack.id }
+                        if (affectsPlaying) app.playerController.stopIfPlayingBook(activeBook.id)
+                        val removedBook = app.repository.deleteTracksUpTo(activeBook.id, tid)
+                        if (removedBook) {
+                            app.playerController.stopIfPlayingBook(activeBook.id)
+                        } else if (!affectsPlaying) {
+                            app.playerController.refreshCurrentBookMetadata(activeBook.id)
+                        }
                     }
                 }
             },

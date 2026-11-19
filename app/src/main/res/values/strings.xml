@@ -174,8 +174,25 @@
     <string name="settings_version_format">PureAudiobooks v%1$s (Build %2$d)</string>
 
     <string name="audiobook_settings_title">Audiobook settings</string>
+    <string name="audiobook_settings_section_metadata">Metadata &amp; Cover</string>
+    <string name="edit_metadata_and_cover">Edit metadata &amp; cover</string>
     <string name="audiobook_settings_section_audio">Audio &amp; Playback</string>
     <string name="audiobook_settings_section_library">Library &amp; Status</string>
+    <string name="tab_chapters">Chapters (%1$d)</string>
+    <string name="tab_bookmarks">Bookmarks (%1$d)</string>
+    <string name="tab_info">Info</string>
+    <string name="empty_bookmarks">No bookmarks yet.</string>
+
+    <string name="chapter_action_play">Play chapter</string>
+    <string name="chapter_action_mark_up_to">Mark chapters 1-%1$d as finished</string>
+    <string name="chapter_action_mark_from_unfinished">Mark from chapter %1$d as unfinished</string>
+    <string name="chapter_action_mark_finished_single">Mark this chapter as finished</string>
+    <string name="chapter_action_mark_unfinished_single">Mark this chapter as unfinished</string>
+    <string name="chapter_action_delete_up_to">Delete chapters 1-%1$d</string>
+    <string name="chapter_delete_confirm_title">Delete %1$d chapter(s)?</string>
+    <string name="chapter_delete_confirm_rw">This will remove chapters 1-%1$d from the audiobook and delete the corresponding local audio files.</string>
+    <string name="chapter_delete_confirm_ro">This will remove chapters 1-%1$d from the app. Your local audio files will remain untouched (read-only access).</string>
+    <string name="chapter_delete_all_warning">Warning: All chapters of this audiobook are selected, so the audiobook entry will be removed.</string>
     <string name="override_global">Global</string>
     <string name="override_off">Off</string>
     <string name="override_on">On</string>

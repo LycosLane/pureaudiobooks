@@ -199,6 +199,70 @@ class AudiobookRepository(
         )
     }
 
+    suspend fun markTracksUpToFinished(audiobookId: Long, targetTrackId: Long) = withContext(Dispatchers.IO) {
+        val tracks = dao.getTracksForAudiobook(audiobookId)
+        val idx = tracks.indexOfFirst { it.id == targetTrackId }
+        if (idx < 0) return@withContext
+        for (i in 0..idx) {
+            dao.setTrackFinished(tracks[i].id, true)
+            dao.updateTrackPosition(tracks[i].id, 0L)
+        }
+        val now = System.currentTimeMillis()
+        if (idx == tracks.lastIndex) {
+            dao.setAudiobookFinished(audiobookId, true, now)
+        } else {
+            dao.setAudiobookFinished(audiobookId, false, 0L)
+            dao.updateLastTrack(audiobookId, tracks[idx + 1].id, now)
+        }
+    }
+
+    suspend fun markTracksFromUnfinished(audiobookId: Long, targetTrackId: Long) = withContext(Dispatchers.IO) {
+        val tracks = dao.getTracksForAudiobook(audiobookId)
+        val idx = tracks.indexOfFirst { it.id == targetTrackId }
+        if (idx < 0) return@withContext
+        for (i in idx..tracks.lastIndex) {
+            dao.setTrackFinished(tracks[i].id, false)
+            dao.updateTrackPosition(tracks[i].id, 0L)
+        }
+        dao.setAudiobookFinished(audiobookId, false, 0L)
+        if (idx == 0) {
+            dao.updateLastTrack(audiobookId, 0L, 0L)
+        } else {
+            dao.updateLastTrack(audiobookId, targetTrackId, System.currentTimeMillis())
+        }
+    }
+
+    suspend fun deleteTracksUpTo(audiobookId: Long, targetTrackId: Long): Boolean = withContext(Dispatchers.IO) {
+        val book = dao.getAudiobook(audiobookId) ?: return@withContext false
+        val tracks = dao.getTracksForAudiobook(audiobookId)
+        val idx = tracks.indexOfFirst { it.id == targetTrackId }
+        if (idx < 0) return@withContext false
+        val toDelete = tracks.subList(0, idx + 1)
+        val hasWrite = LocalAudiobookScanner.hasWritePermission(context, book.folderUri)
+        for (t in toDelete) {
+            if (hasWrite) {
+                LocalAudiobookScanner.deleteLocalDocument(context, t.fileUri)
+            }
+            dao.deleteBookmarksForTrack(t.id)
+            dao.deleteTrack(t.id)
+        }
+        if (toDelete.size >= tracks.size) {
+            dao.deleteAudiobook(audiobookId)
+            return@withContext true
+        }
+        val remaining = tracks.subList(idx + 1, tracks.size)
+        if (toDelete.any { it.id == book.lastTrackId }) {
+            dao.updateLastTrack(audiobookId, remaining.first().id, book.lastPlayedAtMs)
+        }
+        val allDone = remaining.isNotEmpty() && remaining.all { it.isFinished }
+        dao.setAudiobookFinished(
+            audiobookId = audiobookId,
+            finished = allDone,
+            finishedAtMs = if (allDone) System.currentTimeMillis() else 0L
+        )
+        false
+    }
+
     suspend fun markBookFinished(audiobookId: Long, finished: Boolean) = withContext(Dispatchers.IO) {
         dao.resetAllTracksForBook(audiobookId, finished = finished, positionMs = 0L)
         dao.setAudiobookFinished(

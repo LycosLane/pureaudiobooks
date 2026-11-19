@@ -210,6 +210,7 @@ fun PlayerPrimaryControlsBar(
     sleepAtEndOfTrack: Boolean,
     remainingRawMs: Long?,
     activePanel: PlayerControlPanel,
+    panelAboveTiles: Boolean = false,
     onTogglePanel: (PlayerControlPanel) -> Unit,
     onSetSpeed: (Float) -> Unit,
     onSetSilenceMode: (Boolean, Int) -> Unit,
@@ -230,6 +231,58 @@ fun PlayerPrimaryControlsBar(
         sleepAtEndOfTrack -> stringResource(R.string.sleep_end_of_chapter_short)
         sleepTimerRemainingMs > 0L -> Formatters.formatDuration(sleepTimerRemainingMs)
         else -> stringResource(R.string.player_sleep)
+    }
+
+    val panelContent: @Composable () -> Unit = {
+        if (activePanel != PlayerControlPanel.NONE) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                ) {
+                    when (activePanel) {
+                        PlayerControlPanel.SPEED -> SpeedControlPanel(
+                            targetId = bookId,
+                            currentSpeed = playbackSpeed,
+                            remainingRawMs = remainingRawMs,
+                            onSetSpeed = onSetSpeed
+                        )
+                        PlayerControlPanel.SILENCE -> SilenceControlPanel(
+                            skipSilence = skipSilence,
+                            silenceIntensity = silenceIntensity,
+                            onSetSilenceMode = onSetSilenceMode
+                        )
+                        PlayerControlPanel.AUDIO_FIX -> AudioFixControlPanel(
+                            trackId = trackId,
+                            globalMonoMode = globalMonoMode,
+                            bookMonoOverride = bookMonoOverride,
+                            trackMonoOverride = trackMonoOverride,
+                            onSetTrackMonoOverride = onSetTrackMonoOverride,
+                            onSetBookMonoOverride = onSetBookMonoOverride
+                        )
+                        PlayerControlPanel.SLEEP -> SleepControlPanel(
+                            remainingMs = sleepTimerRemainingMs,
+                            presetMinutes = sleepTimerPresetMinutes,
+                            sleepAtEndOfTrack = sleepAtEndOfTrack,
+                            onSetSleepTimer = onSetSleepMinutes,
+                            onSetSleepEndOfTrack = onSetSleepEndOfTrack
+                        )
+                        PlayerControlPanel.NONE -> Unit
+                    }
+                }
+            }
+        }
+    }
+
+    if (panelAboveTiles && activePanel != PlayerControlPanel.NONE) {
+        panelContent()
+        Spacer(Modifier.height(10.dp))
     }
 
     Row(
@@ -275,50 +328,9 @@ fun PlayerPrimaryControlsBar(
         )
     }
 
-    if (activePanel != PlayerControlPanel.NONE) {
+    if (!panelAboveTiles && activePanel != PlayerControlPanel.NONE) {
         Spacer(Modifier.height(10.dp))
-        Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 12.dp)
-            ) {
-                when (activePanel) {
-                    PlayerControlPanel.SPEED -> SpeedControlPanel(
-                        targetId = bookId,
-                        currentSpeed = playbackSpeed,
-                        remainingRawMs = remainingRawMs,
-                        onSetSpeed = onSetSpeed
-                    )
-                    PlayerControlPanel.SILENCE -> SilenceControlPanel(
-                        skipSilence = skipSilence,
-                        silenceIntensity = silenceIntensity,
-                        onSetSilenceMode = onSetSilenceMode
-                    )
-                    PlayerControlPanel.AUDIO_FIX -> AudioFixControlPanel(
-                        trackId = trackId,
-                        globalMonoMode = globalMonoMode,
-                        bookMonoOverride = bookMonoOverride,
-                        trackMonoOverride = trackMonoOverride,
-                        onSetTrackMonoOverride = onSetTrackMonoOverride,
-                        onSetBookMonoOverride = onSetBookMonoOverride
-                    )
-                    PlayerControlPanel.SLEEP -> SleepControlPanel(
-                        remainingMs = sleepTimerRemainingMs,
-                        presetMinutes = sleepTimerPresetMinutes,
-                        sleepAtEndOfTrack = sleepAtEndOfTrack,
-                        onSetSleepTimer = onSetSleepMinutes,
-                        onSetSleepEndOfTrack = onSetSleepEndOfTrack
-                    )
-                    PlayerControlPanel.NONE -> Unit
-                }
-            }
-        }
+        panelContent()
     }
 }
 

@@ -252,23 +252,27 @@ fun SettingsScreen(
                     )
                 }
                 SectionDivider()
-                Text(
-                    text = stringResource(R.string.settings_smart_rewind),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
+                val isSmartRewindOn = settings.smartRewindSeconds > 0
+                SettingSwitchRow(
+                    title = stringResource(R.string.settings_smart_rewind),
+                    checked = isSmartRewindOn,
+                    onCheckedChange = { enabled ->
+                        onChangeSmartRewind(if (enabled) 10 else 0)
+                    }
                 )
-                Spacer(Modifier.height(8.dp))
-                PureSegmentedControl(
-                    options = listOf(
-                        0 to stringResource(R.string.off),
-                        5 to stringResource(R.string.seconds_short, 5),
-                        10 to stringResource(R.string.seconds_short, 10),
-                        15 to stringResource(R.string.seconds_short, 15),
-                        30 to stringResource(R.string.seconds_short, 30)
-                    ),
-                    selected = settings.smartRewindSeconds,
-                    onSelect = onChangeSmartRewind
-                )
+                if (isSmartRewindOn) {
+                    Spacer(Modifier.height(8.dp))
+                    PureSegmentedControl(
+                        options = listOf(
+                            5 to stringResource(R.string.seconds_short, 5),
+                            10 to stringResource(R.string.seconds_short, 10),
+                            15 to stringResource(R.string.seconds_short, 15),
+                            30 to stringResource(R.string.seconds_short, 30)
+                        ),
+                        selected = settings.smartRewindSeconds,
+                        onSelect = onChangeSmartRewind
+                    )
+                }
                 SectionDivider()
                 Text(
                     text = stringResource(R.string.settings_bt_seek),

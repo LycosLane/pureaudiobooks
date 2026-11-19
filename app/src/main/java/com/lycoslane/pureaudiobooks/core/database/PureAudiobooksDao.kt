@@ -89,6 +89,9 @@ interface PureAudiobooksDao {
     @Query("DELETE FROM bookmarks WHERE id = :bookmarkId")
     suspend fun deleteBookmark(bookmarkId: Long)
 
+    @Query("DELETE FROM bookmarks WHERE trackId = :trackId")
+    suspend fun deleteBookmarksForTrack(trackId: Long)
+
     @Query("DELETE FROM audiobooks WHERE id = :audiobookId")
     suspend fun deleteAudiobook(audiobookId: Long)
 
