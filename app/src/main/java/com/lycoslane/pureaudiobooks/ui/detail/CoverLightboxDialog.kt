@@ -1,5 +1,6 @@
 package com.lycoslane.pureaudiobooks.ui.detail
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -30,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -48,10 +50,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.lycoslane.pureaudiobooks.R
 import com.lycoslane.pureaudiobooks.ui.common.BookCoverImage
+import com.lycoslane.pureaudiobooks.ui.common.LocalSuspendGlobalTextZoom
 import kotlin.math.roundToInt
 
 @Composable
@@ -67,17 +68,31 @@ fun CoverLightboxDialog(
     var offsetX by remember(artworkUrl) { mutableFloatStateOf(0f) }
     var offsetY by remember(artworkUrl) { mutableFloatStateOf(0f) }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
+    val suspendGlobalZoom = LocalSuspendGlobalTextZoom.current
+    BackHandler(onBack = onDismiss)
+    DisposableEffect(suspendGlobalZoom) {
+        if (suspendGlobalZoom != null) {
+            suspendGlobalZoom.intValue += 1
+        }
+        onDispose {
+            if (suspendGlobalZoom != null) {
+                suspendGlobalZoom.intValue = (suspendGlobalZoom.intValue - 1).coerceAtLeast(0)
+            }
+        }
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent().changes.forEach { it.consume() }
+                    }
+                }
+            },
+        color = Color.Black.copy(alpha = 0.96f)
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = Color.Black.copy(alpha = 0.94f)
-        ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -135,7 +150,7 @@ fun CoverLightboxDialog(
                         .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    val coverSize = min(maxWidth - 8.dp, maxHeight - 8.dp).coerceAtLeast(120.dp)
+                    val coverSize = min(maxWidth - 8.dp, maxHeight - 8.dp).coerceAtLeast(0.dp)
                     Box(
                         modifier = Modifier
                             .size(coverSize)
@@ -245,7 +260,7 @@ fun CoverLightboxDialog(
                         Text(stringResource(R.string.choose_cover_from_gallery))
                     }
                 }
-            }
+                Spacer(Modifier.height(4.dp))
         }
     }
 }

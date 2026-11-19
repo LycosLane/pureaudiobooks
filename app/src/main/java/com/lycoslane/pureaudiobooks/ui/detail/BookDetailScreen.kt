@@ -206,7 +206,8 @@ fun BookDetailScreen(
         AudioMonoMode.OFF
     }
 
-    Scaffold(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
         topBar = {
             TopAppBar(
                 title = {
@@ -476,6 +477,7 @@ fun BookDetailScreen(
                 coverPickerLauncher.launch("image/*")
             }
         )
+    }
     }
 
     if (showBookmarkDialog && book != null) {

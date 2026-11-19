@@ -17,11 +17,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -35,18 +38,23 @@ import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
+val LocalSuspendGlobalTextZoom = staticCompositionLocalOf<MutableIntState?> { null }
+
 fun Modifier.pinchToZoomTextScale(
     textScale: Float,
     onTextScaleChange: (Float) -> Unit,
-    onPreviewScale: ((Float?) -> Unit)? = null
+    onPreviewScale: ((Float?) -> Unit)? = null,
+    enabled: Boolean = true
 ): Modifier = composed {
     val currentScale by rememberUpdatedState(textScale)
     val currentOnCommit by rememberUpdatedState(onTextScaleChange)
     val currentOnPreview by rememberUpdatedState(onPreviewScale)
+    val currentEnabled by rememberUpdatedState(enabled)
 
     pointerInput(Unit) {
         awaitEachGesture {
             awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            if (!currentEnabled) return@awaitEachGesture
             var didZoom = false
             var activeScale = currentScale
             do {
@@ -80,6 +88,7 @@ fun GlobalTextZoomHost(
     content: @Composable () -> Unit
 ) {
     val baseDensity = LocalDensity.current
+    val suspendCount = remember { mutableIntStateOf(0) }
     var previewScale by remember { mutableStateOf<Float?>(null) }
     var showBadge by remember { mutableStateOf(false) }
 
@@ -95,6 +104,7 @@ fun GlobalTextZoomHost(
     }
 
     CompositionLocalProvider(
+        LocalSuspendGlobalTextZoom provides suspendCount,
         LocalDensity provides Density(
             density = baseDensity.density,
             fontScale = baseDensity.fontScale * effectiveScale
@@ -106,7 +116,8 @@ fun GlobalTextZoomHost(
                 .pinchToZoomTextScale(
                     textScale = textScale,
                     onTextScaleChange = onTextScaleChange,
-                    onPreviewScale = { previewScale = it }
+                    onPreviewScale = { previewScale = it },
+                    enabled = suspendCount.intValue == 0
                 )
         ) {
             content()
