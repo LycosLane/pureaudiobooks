@@ -13,6 +13,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,10 +32,31 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 import java.net.HttpURLConnection
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+
+object BookCoverCache {
+    private val _version = MutableStateFlow(0)
+    val version: StateFlow<Int> = _version.asStateFlow()
+
+    fun invalidate(vararg urls: String?) {
+        var removed = false
+        urls.forEach { url ->
+            if (!url.isNullOrBlank()) {
+                NativeBookImageCache.invalidate(url)
+                removed = true
+            }
+        }
+        if (removed) {
+            _version.value += 1
+        }
+    }
+}
 
 private object NativeBookImageCache {
     private const val MAX_IMAGE_BYTES = 8L * 1024 * 1024
@@ -46,6 +68,12 @@ private object NativeBookImageCache {
     }
 
     fun getCached(url: String): ImageBitmap? = if (url.isBlank()) null else memoryCache.get(url)
+
+    fun invalidate(url: String) {
+        if (url.isNotBlank()) {
+            memoryCache.remove(url)
+        }
+    }
 
     suspend fun load(context: Context, url: String): ImageBitmap? {
         if (url.isBlank()) return null
@@ -170,9 +198,10 @@ fun BookCoverImage(
     contentScale: ContentScale = ContentScale.Crop
 ) {
     val context = LocalContext.current
-    var imageBitmap by remember(url) { mutableStateOf(NativeBookImageCache.getCached(url)) }
+    val cacheVersion by BookCoverCache.version.collectAsState()
+    var imageBitmap by remember(url, cacheVersion) { mutableStateOf(NativeBookImageCache.getCached(url)) }
 
-    LaunchedEffect(url) {
+    LaunchedEffect(url, cacheVersion) {
         imageBitmap = NativeBookImageCache.load(context, url)
     }
 

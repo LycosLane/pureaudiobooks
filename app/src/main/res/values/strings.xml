@@ -96,7 +96,7 @@
     <string name="silence_soft">Soft</string>
     <string name="silence_medium">Medium</string>
     <string name="silence_strong">Strong</string>
-    <string name="player_mono_short">Mono</string>
+    <string name="player_mono_short">Stereo</string>
     <string name="player_sleep">Sleep</string>
     <string name="player_sleep_title">Sleep timer</string>
     <string name="player_chapters_short">Chapters</string>
@@ -198,13 +198,42 @@
     <string name="override_on">On</string>
     <string name="override_global_state">Global: %1$s</string>
 
-    <string name="player_audio_fix_title">Mono / Audio-Fix</string>
+    <string name="player_audio_fix_title">Stereo / Mono-Fix</string>
     <string name="player_scope_chapter">This chapter</string>
     <string name="player_scope_book">This audiobook</string>
     <string name="player_audio_fix_inherited">Inherited: %1$s</string>
     <string name="player_audio_fix_active_chapter">Active for this chapter</string>
     <string name="player_audio_fix_active_book">Active for this audiobook</string>
     <string name="action_reset">Reset</string>
+    <string name="mono_mode_stereo">Stereo</string>
+
+    <string name="pull_up_all_settings_hint">Pull up for all audiobook settings</string>
+    <string name="open_all_audiobook_settings">All audiobook settings</string>
+    <string name="apply_to_all_audiobooks">Apply to all audiobooks</string>
+    <string name="differs_from_global_summary">Differs from global defaults: %1$s</string>
+    <string name="applied_to_all_audiobooks">Applied to all audiobooks</string>
+
+    <string name="cover_fullscreen_title">Cover artwork</string>
+    <string name="search_online_alternatives">Search online for alternatives</string>
+    <string name="choose_cover_from_gallery">Choose cover from gallery</string>
+    <string name="cover_updated">Cover updated</string>
+    <string name="tap_active_tab_to_collapse">Tap active tab again to collapse</string>
+    <string name="no_description_available">No description available.</string>
+    <string name="enable_online_lookup_action">Enable online lookup</string>
+    <string name="metadata_candidates_header">Results (%1$d) - tap to fill all fields</string>
+    <string name="metadata_select_all_new">All new</string>
+    <string name="metadata_select_cover_only">Cover only</string>
+    <string name="metadata_keep_all">Keep all</string>
+    <string name="metadata_before_label">Before</string>
+    <string name="metadata_after_label">After</string>
+    <string name="metadata_current_label">Current</string>
+    <string name="metadata_no_cover">No cover</string>
+    <string name="metadata_swipe_hint">Swipe or &lt; &gt;</string>
+    <string name="metadata_empty_value">None</string>
+    <string name="metadata_edited_tag">Edited</string>
+    <string name="field_cover">Cover</string>
+    <string name="metadata_apply_diff_count">Apply selection (%1$d new)</string>
+    <string name="action_done">Done</string>
 
     <string name="snackbar_book_hidden">Audiobook hidden</string>
     <string name="action_undo">Undo</string>

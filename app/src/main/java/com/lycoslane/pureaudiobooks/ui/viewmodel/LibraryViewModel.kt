@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lycoslane.pureaudiobooks.PureAudiobooksApplication
+import com.lycoslane.pureaudiobooks.core.database.AudiobookEntity
 import com.lycoslane.pureaudiobooks.core.database.AudiobookWithTracks
 import com.lycoslane.pureaudiobooks.core.preferences.AppSettings
 import com.lycoslane.pureaudiobooks.ui.common.Formatters
@@ -87,6 +88,30 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             app.playerController.stopIfPlayingBook(bookId)
             repo.resetBookProgress(bookId)
+        }
+    }
+
+    fun setBookPlaybackSpeed(bookId: Long, speed: Float) {
+        app.playerController.setBookPlaybackSpeed(bookId, speed)
+    }
+
+    fun setBookSilenceMode(bookId: Long, enabled: Boolean, intensity: Int) {
+        app.playerController.setBookSilenceMode(bookId, enabled, intensity)
+    }
+
+    fun setBookMonoOverride(bookId: Long, mode: Int) {
+        app.playerController.setBookMonoOverride(bookId, mode)
+    }
+
+    fun setBookNormalizationOverride(bookId: Long, override: Int) {
+        app.playerController.setBookNormalizationOverride(bookId, override)
+    }
+
+    fun applyBookAudioSettingsToAll(book: AudiobookEntity, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            repo.applyAudioSettingsToAllBooks(book)
+            app.playerController.refreshAfterApplyAll()
+            onDone()
         }
     }
 

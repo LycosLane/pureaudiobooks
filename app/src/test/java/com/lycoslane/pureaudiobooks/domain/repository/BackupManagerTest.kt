@@ -54,6 +54,8 @@ class BackupManagerTest {
         preferences.setLightAccent("indigo")
         preferences.setDarkAccent("coral")
         preferences.setMonoMode(AudioMonoMode.AUTO)
+        preferences.setDefaultPlaybackSpeed(1.32f)
+        preferences.setDefaultSilenceMode(true, 2)
         preferences.setShowRefreshButton(false)
         preferences.setShowSearchBar(false)
 
@@ -107,6 +109,8 @@ class BackupManagerTest {
         preferences.setLightAccent(AppPreferences.DEFAULT_ACCENT)
         preferences.setDarkAccent(AppPreferences.DEFAULT_ACCENT)
         preferences.setMonoMode(AudioMonoMode.OFF)
+        preferences.setDefaultPlaybackSpeed(1.0f)
+        preferences.setDefaultSilenceMode(false, 1)
         preferences.setShowRefreshButton(true)
         preferences.setShowSearchBar(true)
         dao.updatePlaybackSpeed(bookId, 1.0f)
@@ -125,6 +129,9 @@ class BackupManagerTest {
         assertEquals("indigo", restoredPrefs.lightAccent)
         assertEquals("coral", restoredPrefs.darkAccent)
         assertEquals(AudioMonoMode.AUTO, restoredPrefs.monoMode)
+        assertEquals(1.32f, restoredPrefs.defaultPlaybackSpeed, 0.001f)
+        assertTrue(restoredPrefs.defaultSkipSilence)
+        assertEquals(2, restoredPrefs.defaultSilenceIntensity)
         assertFalse(restoredPrefs.showRefreshButton)
         assertFalse(restoredPrefs.showSearchBar)
 

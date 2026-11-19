@@ -62,4 +62,16 @@ class NetworkAndMetadataTest {
         assertEquals("https://covers.openlibrary.org/b/id/12345-L.jpg", ol[0].coverUrl)
         assertEquals("(1965)", ol[0].description)
     }
+
+    @Test
+    fun deduplicateMatchesPreservesDifferentCoverEditions() {
+        val m1 = OnlineBookMatch("The Martian", "Andy Weir", "", "https://example.com/de.jpg", "iTunes")
+        val m2 = OnlineBookMatch("the martian", "andy weir", "", "https://example.com/en.jpg", "Open Library")
+        val dup = OnlineBookMatch("The Martian", "Andy Weir", "desc", "https://example.com/de.jpg", "Open Library")
+
+        val merged = OnlineMetadataClient.deduplicateMatches(listOf(m1, m2, dup))
+        assertEquals(2, merged.size)
+        assertEquals("https://example.com/de.jpg", merged[0].coverUrl)
+        assertEquals("https://example.com/en.jpg", merged[1].coverUrl)
+    }
 }

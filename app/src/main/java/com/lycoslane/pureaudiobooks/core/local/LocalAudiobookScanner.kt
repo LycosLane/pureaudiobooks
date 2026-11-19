@@ -72,7 +72,10 @@ object LocalAudiobookScanner {
     suspend fun syncLocalFolder(
         context: Context,
         dao: PureAudiobooksDao,
-        treeUriString: String
+        treeUriString: String,
+        defaultSpeed: Float = 1.0f,
+        defaultSkipSilence: Boolean = false,
+        defaultSilenceIntensity: Int = 1
     ): Int = withContext(Dispatchers.IO) {
         if (treeUriString.isBlank()) {
             dao.getAllAudiobooksOnce().forEach { dao.deleteAudiobook(it.id) }
@@ -141,7 +144,10 @@ object LocalAudiobookScanner {
                         sidecarInfo = null,
                         coverUri = coverUri,
                         forcedTitle = albumName,
-                        isSplitByAlbum = true
+                        isSplitByAlbum = true,
+                        defaultSpeed = defaultSpeed,
+                        defaultSkipSilence = defaultSkipSilence,
+                        defaultSilenceIntensity = defaultSilenceIntensity
                     )
                     syncedCount++
                 }
@@ -161,7 +167,10 @@ object LocalAudiobookScanner {
                     sidecarInfo = sidecarInfo,
                     coverUri = coverUri,
                     forcedTitle = null,
-                    isSplitByAlbum = false
+                    isSplitByAlbum = false,
+                    defaultSpeed = defaultSpeed,
+                    defaultSkipSilence = defaultSkipSilence,
+                    defaultSilenceIntensity = defaultSilenceIntensity
                 )
                 syncedCount++
             }
@@ -298,7 +307,10 @@ object LocalAudiobookScanner {
         sidecarInfo: SidecarInfo?,
         coverUri: String,
         forcedTitle: String?,
-        isSplitByAlbum: Boolean
+        isSplitByAlbum: Boolean,
+        defaultSpeed: Float = 1.0f,
+        defaultSkipSilence: Boolean = false,
+        defaultSilenceIntensity: Int = 1
     ) {
         val now = System.currentTimeMillis()
         val albumTags = audioFiles.map { metaByDocId[it.docId]?.album.orEmpty() }
@@ -336,6 +348,9 @@ object LocalAudiobookScanner {
                     author = sidecarInfo?.author?.ifBlank { analysis.suggestedAuthor } ?: analysis.suggestedAuthor,
                     description = sidecarInfo?.description.orEmpty(),
                     artworkUrl = coverUri,
+                    playbackSpeed = defaultSpeed.coerceIn(0.50f, 3.00f),
+                    skipSilence = defaultSkipSilence,
+                    silenceIntensity = defaultSilenceIntensity.coerceIn(0, 2),
                     hasTagConflict = if (forcedTitle != null) false else analysis.hasConflict,
                     conflictSummaryJson = analysis.summary.toJson(),
                     metadataLockedByUser = sidecarInfo != null && sidecarInfo.title.isNotBlank(),

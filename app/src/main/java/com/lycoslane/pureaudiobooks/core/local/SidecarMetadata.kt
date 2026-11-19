@@ -115,26 +115,49 @@ object SidecarMetadata {
 
         // Write cover.jpg if provided
         if (coverBytes != null && coverBytes.isNotEmpty()) {
-            val coverUri = runCatching {
-                val existingCoverUri = existingChildren[COVER_FILENAME.lowercase()]
-                val targetUri = existingCoverUri ?: DocumentsContract.createDocument(
-                    context.contentResolver,
-                    parentDocUri,
-                    "image/jpeg",
-                    COVER_FILENAME
-                )
-                if (targetUri != null) {
-                    context.contentResolver.openOutputStream(targetUri, "wt")?.use { out ->
-                        out.write(coverBytes)
-                    }
-                }
-                targetUri?.toString()
-            }.getOrNull()
-            if (!coverUri.isNullOrBlank()) return coverUri
+            return writeCoverDocument(context, parentDocUri, existingChildren, coverBytes)
         }
 
         return null
     }
+
+    fun writeCoverOnlyToFolder(
+        context: Context,
+        treeUriString: String,
+        folderDocId: String,
+        coverBytes: ByteArray
+    ): String? {
+        if (treeUriString.isBlank() || folderDocId.isBlank() || coverBytes.isEmpty()) return null
+        val treeUri = runCatching { Uri.parse(treeUriString) }.getOrNull() ?: return null
+        val hasWrite = context.contentResolver.persistedUriPermissions.any {
+            it.uri == treeUri && it.isWritePermission
+        }
+        if (!hasWrite) return null
+        val parentDocUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, folderDocId)
+        val existingChildren = querySimpleChildren(context, treeUri, folderDocId)
+        return writeCoverDocument(context, parentDocUri, existingChildren, coverBytes)
+    }
+
+    private fun writeCoverDocument(
+        context: Context,
+        parentDocUri: Uri,
+        existingChildren: Map<String, Uri>,
+        coverBytes: ByteArray
+    ): String? = runCatching {
+        val existingCoverUri = existingChildren[COVER_FILENAME.lowercase()]
+        val targetUri = existingCoverUri ?: DocumentsContract.createDocument(
+            context.contentResolver,
+            parentDocUri,
+            "image/jpeg",
+            COVER_FILENAME
+        )
+        if (targetUri != null) {
+            context.contentResolver.openOutputStream(targetUri, "wt")?.use { out ->
+                out.write(coverBytes)
+            }
+        }
+        targetUri?.toString()
+    }.getOrNull()?.takeIf { it.isNotBlank() }
 
     private fun querySimpleChildren(
         context: Context,

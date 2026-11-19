@@ -169,6 +169,30 @@ class BookDetailViewModel(
         }
     }
 
+    fun updateBookCover(coverBytes: ByteArray, onDone: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val ok = repo.updateBookCoverFromBytes(audiobookId, coverBytes)
+            if (ok) {
+                app.playerController.refreshCurrentBookMetadata(audiobookId)
+            }
+            onDone(ok)
+        }
+    }
+
+    fun applyAudioSettingsToAll(onDone: () -> Unit = {}) {
+        val book = bookWithTracks.value?.audiobook ?: return
+        viewModelScope.launch {
+            repo.applyAudioSettingsToAllBooks(book)
+            app.playerController.refreshAfterApplyAll()
+            onDone()
+        }
+    }
+
+    fun enableOnlineLookupAndSearch(query: String) {
+        app.preferences.setOnlineLookupEnabled(true)
+        searchOnline(query)
+    }
+
     fun splitByAlbumTag(onDone: (Int) -> Unit) {
         viewModelScope.launch {
             app.playerController.stopIfPlayingBook(audiobookId)

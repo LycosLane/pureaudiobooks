@@ -26,8 +26,11 @@ object OnlineMetadataClient {
         val results = mutableListOf<OnlineBookMatch>()
         runCatching { results += searchItunesAudiobooks(clean) }
         runCatching { results += searchOpenLibrary(clean) }
-        results.distinctBy { "${it.title.lowercase()}|${it.author.lowercase()}" }
+        deduplicateMatches(results)
     }
+
+    internal fun deduplicateMatches(results: List<OnlineBookMatch>): List<OnlineBookMatch> =
+        results.distinctBy { "${it.title.lowercase()}|${it.author.lowercase()}|${it.coverUrl}" }
 
     private fun searchItunesAudiobooks(query: String): List<OnlineBookMatch> {
         val encoded = URLEncoder.encode(query, "UTF-8")

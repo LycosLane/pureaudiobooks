@@ -13,6 +13,7 @@ import com.lycoslane.pureaudiobooks.core.local.SidecarInfo
 import com.lycoslane.pureaudiobooks.core.local.SidecarMetadata
 import com.lycoslane.pureaudiobooks.core.network.OnlineMetadataClient
 import com.lycoslane.pureaudiobooks.core.preferences.AppPreferences
+import com.lycoslane.pureaudiobooks.ui.common.BookCoverCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -37,8 +38,15 @@ class AudiobookRepository(
         dao.observeBookmarks(audiobookId)
 
     suspend fun syncLocalLibrary(): Int = withContext(Dispatchers.IO) {
-        val uri = preferences.settings.value.localFolderUri
-        val count = LocalAudiobookScanner.syncLocalFolder(context, dao, uri)
+        val s = preferences.settings.value
+        val count = LocalAudiobookScanner.syncLocalFolder(
+            context = context,
+            dao = dao,
+            treeUriString = s.localFolderUri,
+            defaultSpeed = s.defaultPlaybackSpeed,
+            defaultSkipSilence = s.defaultSkipSilence,
+            defaultSilenceIntensity = s.defaultSilenceIntensity
+        )
         runTrashMaintenance()
         count
     }
@@ -103,6 +111,10 @@ class AudiobookRepository(
             }
         }
 
+        if (coverBytes != null) {
+            BookCoverCache.invalidate(book.artworkUrl, nextArtworkUrl)
+        }
+
         dao.updateAudiobookMetadata(
             audiobookId = book.id,
             title = cleanTitle,
@@ -113,6 +125,68 @@ class AudiobookRepository(
             conflictSummaryJson = book.conflictSummaryJson,
             metadataLockedByUser = true,
             lastScannedMs = System.currentTimeMillis()
+        )
+    }
+
+    suspend fun updateBookCoverFromBytes(
+        audiobookId: Long,
+        coverBytes: ByteArray
+    ): Boolean = withContext(Dispatchers.IO) {
+        if (coverBytes.isEmpty() || coverBytes.size > MAX_COVER_BYTES) return@withContext false
+        val book = dao.getAudiobook(audiobookId) ?: return@withContext false
+
+        val coversDir = File(context.filesDir, "local_covers").apply { mkdirs() }
+        val localFile = File(coversDir, "${sha256(book.folderKey)}.jpg")
+        localFile.writeBytes(coverBytes)
+        var nextArtworkUrl = localFile.absolutePath
+
+        if (book.folderUri.isNotBlank() && book.folderDocId.isNotBlank()) {
+            val writtenCoverUri = SidecarMetadata.writeCoverOnlyToFolder(
+                context = context,
+                treeUriString = book.folderUri,
+                folderDocId = book.folderDocId,
+                coverBytes = coverBytes
+            )
+            if (!writtenCoverUri.isNullOrBlank()) {
+                nextArtworkUrl = writtenCoverUri
+            }
+        }
+
+        dao.updateBookArtwork(
+            audiobookId = book.id,
+            artworkUrl = nextArtworkUrl,
+            lastScannedMs = System.currentTimeMillis()
+        )
+        BookCoverCache.invalidate(book.artworkUrl, nextArtworkUrl)
+        true
+    }
+
+    suspend fun applyAudioSettingsToAllBooks(book: AudiobookEntity) = withContext(Dispatchers.IO) {
+        val global = preferences.settings.value
+        val speed = book.playbackSpeed.coerceIn(0.50f, 3.00f)
+        val skipSilence = book.skipSilence
+        val silenceIntensity = book.silenceIntensity.coerceIn(0, 2)
+        val effectiveMono = AudioMonoMode.resolveEffective(
+            globalMonoMode = global.monoMode,
+            bookMonoOverride = book.monoModeOverride,
+            trackMonoOverride = AudioMonoMode.INHERIT
+        )
+        val effectiveNorm = AudioOverride.resolve(
+            globalEnabled = global.audioNormalizationEnabled,
+            bookOverride = book.audioNormalizationOverride
+        )
+
+        preferences.setDefaultPlaybackSpeed(speed)
+        preferences.setDefaultSilenceMode(skipSilence, silenceIntensity)
+        preferences.setMonoMode(effectiveMono)
+        preferences.setAudioNormalizationEnabled(effectiveNorm)
+
+        dao.applyAudioSettingsToAllBooks(
+            speed = speed,
+            skipSilence = skipSilence,
+            silenceIntensity = silenceIntensity,
+            monoOverride = AudioMonoMode.INHERIT,
+            normOverride = AudioOverride.INHERIT
         )
     }
 
@@ -336,5 +410,9 @@ class AudiobookRepository(
     private fun sha256(input: String): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray())
         return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    companion object {
+        private const val MAX_COVER_BYTES = 8 * 1024 * 1024
     }
 }

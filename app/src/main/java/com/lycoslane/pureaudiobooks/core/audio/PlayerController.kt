@@ -716,15 +716,17 @@ class PlayerController(
                 globalEnabled = global.audioNormalizationEnabled,
                 bookOverride = updated.audioNormalizationOverride
             )
+            val clampedSpeed = updated.playbackSpeed.coerceIn(0.50f, 3.00f)
+            val normIntensity = updated.silenceIntensity.coerceIn(0, 2)
             _state.update {
                 it.copy(
                     currentBook = updated,
                     currentTrack = updatedTrack,
                     bookTracks = tracks,
                     totalBookTracks = tracks.size,
-                    playbackSpeed = updated.playbackSpeed.coerceIn(0.50f, 3.00f),
+                    playbackSpeed = clampedSpeed,
                     skipSilence = updated.skipSilence,
-                    silenceIntensity = updated.silenceIntensity.coerceIn(0, 2),
+                    silenceIntensity = normIntensity,
                     bookMonoOverride = updated.monoModeOverride,
                     trackMonoOverride = updatedTrack?.monoModeOverride ?: AudioMonoMode.INHERIT,
                     effectiveMonoMode = effectiveMono,
@@ -732,6 +734,23 @@ class PlayerController(
                     effectiveAudioNormalization = effectiveNorm
                 )
             }
+            withContext(Dispatchers.Main) {
+                mediaController?.takeIf { it.isConnected }?.let { mc ->
+                    mc.playbackParameters = PlaybackParameters(clampedSpeed)
+                    sendSkipSilenceCommand(mc, updated.skipSilence, normIntensity)
+                    sendMonoModeCommand(mc, effectiveMono)
+                    sendAudioNormalizationCommand(mc, effectiveNorm)
+                }
+            }
+        }
+    }
+
+    fun refreshAfterApplyAll() {
+        val curId = _state.value.currentBook?.id
+        if (curId != null) {
+            refreshCurrentBookMetadata(curId)
+        } else {
+            refreshEffectiveAudioSettings()
         }
     }
 

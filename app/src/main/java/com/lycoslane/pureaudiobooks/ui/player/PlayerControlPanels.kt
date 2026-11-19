@@ -312,8 +312,6 @@ fun PlayerPrimaryControlsBar(
             icon = Icons.Default.Headphones,
             label = monoTileLabel,
             active = effectiveMonoMode != AudioMonoMode.OFF ||
-                trackMonoOverride != AudioMonoMode.INHERIT ||
-                bookMonoOverride != AudioMonoMode.INHERIT ||
                 activePanel == PlayerControlPanel.AUDIO_FIX,
             onClick = { onTogglePanel(PlayerControlPanel.AUDIO_FIX) },
             modifier = Modifier.weight(1f)
@@ -628,7 +626,7 @@ internal fun AudioFixControlPanel(
     Spacer(Modifier.height(8.dp))
     PureSegmentedControl(
         options = listOf(
-            AudioMonoMode.OFF to stringResource(R.string.mono_mode_off),
+            AudioMonoMode.OFF to stringResource(R.string.mono_mode_stereo),
             AudioMonoMode.MIX to stringResource(R.string.mono_mode_mix),
             AudioMonoMode.AUTO to stringResource(R.string.mono_mode_smart),
             AudioMonoMode.LEFT to stringResource(R.string.mono_mode_left),

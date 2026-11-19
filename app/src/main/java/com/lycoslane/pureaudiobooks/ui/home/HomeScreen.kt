@@ -55,9 +55,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.lycoslane.pureaudiobooks.R
+import com.lycoslane.pureaudiobooks.core.database.AudiobookEntity
 import com.lycoslane.pureaudiobooks.core.database.AudiobookWithTracks
+import com.lycoslane.pureaudiobooks.core.preferences.AppSettings
 import com.lycoslane.pureaudiobooks.ui.common.Formatters
 import com.lycoslane.pureaudiobooks.ui.common.PureSegmentedControl
+import com.lycoslane.pureaudiobooks.ui.detail.AudiobookSettingsSheet
 
 private enum class LibraryFilter {
     ACTIVE, FINISHED, HIDDEN, CONFLICTS, TRASH
@@ -72,6 +75,7 @@ fun HomeScreen(
     gridLayout: Boolean,
     showRefreshButton: Boolean,
     showSearchBar: Boolean,
+    globalSettings: AppSettings,
     isScanning: Boolean,
     activeTrackId: Long?,
     activePositionMs: Long,
@@ -81,7 +85,13 @@ fun HomeScreen(
     onPickFolder: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenBook: (Long) -> Unit,
+    onOpenBookMetadata: (Long) -> Unit,
     onPlayBook: (AudiobookWithTracks) -> Unit,
+    onSetBookSpeed: (Long, Float) -> Unit,
+    onSetBookSilence: (Long, Boolean, Int) -> Unit,
+    onSetBookMonoOverride: (Long, Int) -> Unit,
+    onSetBookNormalizationOverride: (Long, Int) -> Unit,
+    onApplyBookAudioToAll: (AudiobookEntity) -> Unit,
     onMarkFinished: (Long, Boolean) -> Unit,
     onResetProgress: (Long) -> Unit,
     onSetHidden: (Long, Boolean) -> Unit,
@@ -501,14 +511,44 @@ fun HomeScreen(
     }
 
     bookMenuTarget?.let { target ->
-        BookActionsDialog(
-            target = target,
+        val liveTarget = activeBooks.firstOrNull { it.audiobook.id == target.audiobook.id } ?: target
+        val sortedTracks = remember(liveTarget.tracks) { Formatters.sortedTracks(liveTarget.tracks) }
+        val targetProgress = Formatters.calculateBookProgress(
+            tracks = sortedTracks,
+            activeTrackId = activeTrackId,
+            activePositionMs = activePositionMs,
+            fallbackTrackId = liveTarget.audiobook.lastTrackId
+        )
+        val book = liveTarget.audiobook
+        AudiobookSettingsSheet(
+            book = book,
+            remainingRawMs = targetProgress.remainingMs,
+            globalSettings = globalSettings,
+            progressFraction = targetProgress.fraction,
+            startInQuickMode = true,
             onDismiss = { bookMenuTarget = null },
-            onOpenBook = onOpenBook,
-            onMarkFinished = onMarkFinished,
-            onResetProgress = onResetProgress,
-            onSetHidden = onSetHidden,
-            onMoveToTrash = onMoveToTrash
+            onSetSpeed = { speed -> onSetBookSpeed(book.id, speed) },
+            onSetSilenceMode = { enabled, intensity -> onSetBookSilence(book.id, enabled, intensity) },
+            onSetMonoModeOverride = { mode -> onSetBookMonoOverride(book.id, mode) },
+            onSetNormalizationOverride = { ov -> onSetBookNormalizationOverride(book.id, ov) },
+            onSetHidden = { hidden ->
+                bookMenuTarget = null
+                onSetHidden(book.id, hidden)
+            },
+            onMarkFinished = { finished -> onMarkFinished(book.id, finished) },
+            onResetProgress = {
+                bookMenuTarget = null
+                onResetProgress(book.id)
+            },
+            onMoveToTrash = {
+                bookMenuTarget = null
+                onMoveToTrash(book.id)
+            },
+            onApplyToAllAudiobooks = { onApplyBookAudioToAll(book) },
+            onEditMetadata = {
+                bookMenuTarget = null
+                onOpenBookMetadata(book.id)
+            }
         )
     }
 

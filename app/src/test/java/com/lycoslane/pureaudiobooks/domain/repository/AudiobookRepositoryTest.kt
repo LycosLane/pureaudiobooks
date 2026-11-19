@@ -4,6 +4,8 @@ import android.app.Application
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.lycoslane.pureaudiobooks.core.audio.AudioMonoMode
+import com.lycoslane.pureaudiobooks.core.audio.AudioOverride
 import com.lycoslane.pureaudiobooks.core.database.AudiobookEntity
 import com.lycoslane.pureaudiobooks.core.database.BookmarkEntity
 import com.lycoslane.pureaudiobooks.core.database.ChapterTrackEntity
@@ -21,6 +23,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = Application::class)
@@ -29,6 +32,7 @@ class AudiobookRepositoryTest {
     private lateinit var context: Context
     private lateinit var db: PureAudiobooksDatabase
     private lateinit var dao: PureAudiobooksDao
+    private lateinit var prefs: AppPreferences
     private lateinit var repo: AudiobookRepository
 
     @Before
@@ -42,7 +46,8 @@ class AudiobookRepositoryTest {
             .allowMainThreadQueries()
             .build()
         dao = db.dao()
-        repo = AudiobookRepository(context, dao, AppPreferences(context))
+        prefs = AppPreferences(context)
+        repo = AudiobookRepository(context, dao, prefs)
     }
 
     @After
@@ -147,5 +152,70 @@ class AudiobookRepositoryTest {
         assertTrue(removedBook)
         assertNull(dao.getAudiobook(bookId))
         assertEquals(0, dao.getAllBookmarksOnce().size)
+    }
+
+    @Test
+    fun applyAudioSettingsToAllBooksUpdatesPrefsAndResetsAllBooksOverrides() = runTest {
+        val book1Id = dao.insertAudiobook(
+            AudiobookEntity(
+                folderKey = "local://b1",
+                folderName = "B1",
+                title = "B1",
+                playbackSpeed = 1.44f,
+                skipSilence = true,
+                silenceIntensity = 2,
+                monoModeOverride = AudioMonoMode.AUTO,
+                audioNormalizationOverride = AudioOverride.ON
+            )
+        )
+        val book2Id = dao.insertAudiobook(
+            AudiobookEntity(
+                folderKey = "local://b2",
+                folderName = "B2",
+                title = "B2",
+                playbackSpeed = 1.0f,
+                skipSilence = false,
+                silenceIntensity = 0,
+                monoModeOverride = AudioMonoMode.LEFT,
+                audioNormalizationOverride = AudioOverride.OFF
+            )
+        )
+
+        val sourceBook = dao.getAudiobook(book1Id)!!
+        repo.applyAudioSettingsToAllBooks(sourceBook)
+
+        val savedSettings = prefs.settings.value
+        assertEquals(1.44f, savedSettings.defaultPlaybackSpeed, 0.001f)
+        assertTrue(savedSettings.defaultSkipSilence)
+        assertEquals(2, savedSettings.defaultSilenceIntensity)
+        assertEquals(AudioMonoMode.AUTO, savedSettings.monoMode)
+        assertTrue(savedSettings.audioNormalizationEnabled)
+
+        val b1After = dao.getAudiobook(book1Id)!!
+        val b2After = dao.getAudiobook(book2Id)!!
+        listOf(b1After, b2After).forEach { book ->
+            assertEquals(1.44f, book.playbackSpeed, 0.001f)
+            assertTrue(book.skipSilence)
+            assertEquals(2, book.silenceIntensity)
+            assertEquals(AudioMonoMode.INHERIT, book.monoModeOverride)
+            assertEquals(AudioOverride.INHERIT, book.audioNormalizationOverride)
+        }
+    }
+
+    @Test
+    fun updateBookCoverFromBytesWritesLocalCoverAndUpdatesArtworkUrl() = runTest {
+        val bookId = dao.insertAudiobook(
+            AudiobookEntity(folderKey = "local://cov", folderName = "Cov", title = "Cov")
+        )
+        assertFalse(repo.updateBookCoverFromBytes(bookId, ByteArray(0)))
+
+        val payload = byteArrayOf(0x11, 0x22, 0x33, 0x44)
+        assertTrue(repo.updateBookCoverFromBytes(bookId, payload))
+        val updated = dao.getAudiobook(bookId)!!
+        assertTrue(updated.artworkUrl.isNotBlank())
+        assertTrue(updated.metadataLockedByUser)
+        val coverFile = File(updated.artworkUrl)
+        assertTrue(coverFile.exists())
+        assertEquals(4L, coverFile.length())
     }
 }

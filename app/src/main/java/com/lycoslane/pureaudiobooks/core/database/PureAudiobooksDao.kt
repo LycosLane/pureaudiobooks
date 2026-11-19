@@ -139,6 +139,27 @@ interface PureAudiobooksDao {
     @Query("UPDATE audiobooks SET audioNormalizationOverride = :override WHERE id = :audiobookId")
     suspend fun setBookAudioNormalizationOverride(audiobookId: Long, override: Int)
 
+    @Query(
+        """
+        UPDATE audiobooks SET
+            playbackSpeed = :speed,
+            skipSilence = :skipSilence,
+            silenceIntensity = :silenceIntensity,
+            monoModeOverride = :monoOverride,
+            audioNormalizationOverride = :normOverride
+        """
+    )
+    suspend fun applyAudioSettingsToAllBooks(
+        speed: Float,
+        skipSilence: Boolean,
+        silenceIntensity: Int,
+        monoOverride: Int,
+        normOverride: Int
+    )
+
+    @Query("UPDATE audiobooks SET artworkUrl = :artworkUrl, metadataLockedByUser = 1, lastScannedMs = :lastScannedMs WHERE id = :audiobookId")
+    suspend fun updateBookArtwork(audiobookId: Long, artworkUrl: String, lastScannedMs: Long)
+
     @Query("UPDATE chapter_tracks SET monoModeOverride = :mode WHERE id = :trackId")
     suspend fun setTrackMonoModeOverride(trackId: Long, mode: Int)
 

@@ -16,11 +16,8 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
@@ -37,7 +34,6 @@ import com.lycoslane.pureaudiobooks.PureAudiobooksApplication
 import com.lycoslane.pureaudiobooks.R
 import com.lycoslane.pureaudiobooks.ui.detail.BookDetailScreen
 import com.lycoslane.pureaudiobooks.ui.home.HomeScreen
-import com.lycoslane.pureaudiobooks.ui.player.FullPlayerSheet
 import com.lycoslane.pureaudiobooks.ui.player.MiniPlayer
 import com.lycoslane.pureaudiobooks.ui.settings.SettingsScreen
 import com.lycoslane.pureaudiobooks.ui.viewmodel.BookDetailViewModel
@@ -62,14 +58,6 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
     val settings by libraryViewModel.settings.collectAsStateWithLifecycle()
     val isScanning by libraryViewModel.isScanning.collectAsStateWithLifecycle()
     val playerState by app.playerController.state.collectAsStateWithLifecycle()
-
-    var showFullPlayer by rememberSaveable { mutableStateOf(false) }
-
-    LaunchedEffect(playerState.currentTrack?.id) {
-        if (playerState.currentTrack == null) {
-            showFullPlayer = false
-        }
-    }
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -131,23 +119,25 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val currentDetailBookId = navBackStackEntry?.arguments?.getLong("bookId")
-    val isViewingCurrentBookDetail = currentRoute?.startsWith("detail/") == true &&
-        currentDetailBookId != null &&
-        currentDetailBookId == playerState.currentBook?.id
-    val hideMiniPlayer = currentRoute == "settings" || isViewingCurrentBookDetail
+    val isInDetailRoute = currentRoute?.startsWith("detail/") == true
+    val hideMiniPlayer = currentRoute == "settings" || isInDetailRoute
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             Column {
-                if (playerState.currentTrack != null && !hideMiniPlayer) {
+                val activeBookId = playerState.currentBook?.id
+                if (playerState.currentTrack != null && activeBookId != null && !hideMiniPlayer) {
                     MiniPlayer(
                         state = playerState,
                         onTogglePlayPause = { app.playerController.togglePlayPause() },
-                        onForward30 = { app.playerController.seekBy(30_000L) },
-                        onExpand = { showFullPlayer = true }
+                        onRewind10 = { app.playerController.seekBy(-10_000L) },
+                        onExpand = {
+                            navController.navigate("detail/$activeBookId") {
+                                launchSingleTop = true
+                            }
+                        }
                     )
                 }
             }
@@ -168,6 +158,7 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     gridLayout = settings.gridLayout,
                     showRefreshButton = settings.showRefreshButton,
                     showSearchBar = settings.showSearchBar,
+                    globalSettings = settings,
                     isScanning = isScanning,
                     activeTrackId = playerState.currentTrack?.id,
                     activePositionMs = playerState.positionMs,
@@ -181,7 +172,25 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     onOpenBook = { bookId ->
                         navController.navigate("detail/$bookId") { launchSingleTop = true }
                     },
+                    onOpenBookMetadata = { bookId ->
+                        navController.navigate("detail/$bookId?openMetadata=true") { launchSingleTop = true }
+                    },
                     onPlayBook = { item -> libraryViewModel.playOrToggleBook(item) },
+                    onSetBookSpeed = { bookId, speed -> libraryViewModel.setBookPlaybackSpeed(bookId, speed) },
+                    onSetBookSilence = { bookId, enabled, intensity ->
+                        libraryViewModel.setBookSilenceMode(bookId, enabled, intensity)
+                    },
+                    onSetBookMonoOverride = { bookId, mode -> libraryViewModel.setBookMonoOverride(bookId, mode) },
+                    onSetBookNormalizationOverride = { bookId, ov ->
+                        libraryViewModel.setBookNormalizationOverride(bookId, ov)
+                    },
+                    onApplyBookAudioToAll = { book ->
+                        libraryViewModel.applyBookAudioSettingsToAll(book) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(context.getString(R.string.applied_to_all_audiobooks))
+                            }
+                        }
+                    },
                     onMarkFinished = { bookId, finished -> libraryViewModel.markBookFinished(bookId, finished) },
                     onResetProgress = { bookId -> libraryViewModel.resetBookProgress(bookId) },
                     onSetHidden = { bookId, hidden ->
@@ -239,10 +248,17 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
             }
 
             composable(
-                route = "detail/{bookId}",
-                arguments = listOf(navArgument("bookId") { type = NavType.LongType })
+                route = "detail/{bookId}?openMetadata={openMetadata}",
+                arguments = listOf(
+                    navArgument("bookId") { type = NavType.LongType },
+                    navArgument("openMetadata") {
+                        type = NavType.BoolType
+                        defaultValue = false
+                    }
+                )
             ) { backStackEntry ->
                 val bookId = backStackEntry.arguments?.getLong("bookId") ?: return@composable
+                val openMetadata = backStackEntry.arguments?.getBoolean("openMetadata") ?: false
                 val detailViewModel: BookDetailViewModel = viewModel(
                     key = "detail_$bookId",
                     factory = object : ViewModelProvider.Factory {
@@ -260,9 +276,8 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                 BookDetailScreen(
                     data = bookData,
                     bookmarks = bookmarks,
-                    globalMonoMode = settings.monoMode,
-                    globalAudioNormalization = settings.audioNormalizationEnabled,
-                    onlineLookupEnabled = settings.onlineLookupEnabled,
+                    globalSettings = settings,
+                    initialOpenMetadata = openMetadata,
                     onlineResults = onlineResults,
                     isSearchingOnline = isSearchingOnline,
                     playerState = playerState,
@@ -277,6 +292,13 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     onSetTrackMonoOverride = { trackId, mode -> detailViewModel.setTrackMonoOverride(trackId, mode) },
                     onSetBookMonoOverride = { mode -> detailViewModel.setBookMonoOverride(mode) },
                     onSetBookNormalizationOverride = { ov -> detailViewModel.setBookNormalizationOverride(ov) },
+                    onApplyToAllAudiobooks = {
+                        detailViewModel.applyAudioSettingsToAll {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(context.getString(R.string.applied_to_all_audiobooks))
+                            }
+                        }
+                    },
                     onSleepMinutes = { app.playerController.startSleepTimerMinutes(it) },
                     onSleepEndOfTrack = { app.playerController.setSleepAtEndOfTrack(it) },
                     onAddBookmark = { track, posMs, note ->
@@ -321,7 +343,17 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                         detailViewModel.playBook(track)
                         app.playerController.seekTo(posMs)
                     },
+                    onEnableOnlineLookup = { query -> detailViewModel.enableOnlineLookupAndSearch(query) },
                     onSearchOnline = { query -> detailViewModel.searchOnline(query) },
+                    onPickGalleryCoverBytes = { bytes ->
+                        detailViewModel.updateBookCover(bytes) { updated ->
+                            if (updated) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(context.getString(R.string.cover_updated))
+                                }
+                            }
+                        }
+                    },
                     onResolveMetadata = { title, author, desc, cover ->
                         detailViewModel.resolveMetadata(title, author, desc, cover) {
                             scope.launch {
@@ -340,116 +372,5 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                 )
             }
         }
-    }
-
-    if (showFullPlayer && playerState.currentTrack != null) {
-        val activeBook = playerState.currentBook
-        val activeTrack = playerState.currentTrack
-        FullPlayerSheet(
-            state = playerState,
-            globalMonoMode = settings.monoMode,
-            globalAudioNormalization = settings.audioNormalizationEnabled,
-            onDismiss = { showFullPlayer = false },
-            onTogglePlayPause = { app.playerController.togglePlayPause() },
-            onSeekTo = { app.playerController.seekTo(it) },
-            onSeekBy = { app.playerController.seekBy(it) },
-            onSkipTrack = { app.playerController.skipTrack(it) },
-            onPlayTrack = { chosen ->
-                if (activeBook != null) {
-                    app.playerController.playAudiobook(activeBook, playerState.bookTracks, chosen)
-                }
-            },
-            onToggleTrackFinished = { tid, finished ->
-                scope.launch {
-                    app.repository.setTrackFinished(tid, finished)
-                    if (activeBook != null) {
-                        app.playerController.refreshCurrentBookMetadata(activeBook.id)
-                    }
-                }
-            },
-            onMarkTracksUpToFinished = { tid ->
-                if (activeBook != null) {
-                    scope.launch {
-                        val idx = playerState.bookTracks.indexOfFirst { it.id == tid }
-                        val affectsPlaying = activeTrack != null && idx >= 0 &&
-                            playerState.bookTracks.subList(0, idx + 1).any { it.id == activeTrack.id }
-                        if (affectsPlaying) app.playerController.stopIfPlayingBook(activeBook.id)
-                        app.repository.markTracksUpToFinished(activeBook.id, tid)
-                        if (!affectsPlaying) app.playerController.refreshCurrentBookMetadata(activeBook.id)
-                    }
-                }
-            },
-            onMarkTracksFromUnfinished = { tid ->
-                if (activeBook != null) {
-                    scope.launch {
-                        app.repository.markTracksFromUnfinished(activeBook.id, tid)
-                        app.playerController.refreshCurrentBookMetadata(activeBook.id)
-                    }
-                }
-            },
-            onDeleteTracksUpTo = { tid ->
-                if (activeBook != null) {
-                    scope.launch {
-                        val idx = playerState.bookTracks.indexOfFirst { it.id == tid }
-                        val affectsPlaying = activeTrack != null && idx >= 0 &&
-                            playerState.bookTracks.subList(0, idx + 1).any { it.id == activeTrack.id }
-                        if (affectsPlaying) app.playerController.stopIfPlayingBook(activeBook.id)
-                        val removedBook = app.repository.deleteTracksUpTo(activeBook.id, tid)
-                        if (removedBook) {
-                            app.playerController.stopIfPlayingBook(activeBook.id)
-                        } else if (!affectsPlaying) {
-                            app.playerController.refreshCurrentBookMetadata(activeBook.id)
-                        }
-                    }
-                }
-            },
-            onSpeedChange = { app.playerController.setPlaybackSpeed(it) },
-            onSilenceChange = { enabled, intensity -> app.playerController.setSkipSilence(enabled, intensity) },
-            onSleepMinutes = { app.playerController.startSleepTimerMinutes(it) },
-            onSleepEndOfTrack = { app.playerController.setSleepAtEndOfTrack(it) },
-            onSetTrackMonoOverride = { mode ->
-                if (activeTrack != null) {
-                    app.playerController.setTrackMonoOverride(activeTrack.id, mode)
-                }
-            },
-            onSetBookMonoOverride = { mode ->
-                if (activeBook != null) {
-                    app.playerController.setBookMonoOverride(activeBook.id, mode)
-                }
-            },
-            onSetBookNormalizationOverride = { ov ->
-                if (activeBook != null) {
-                    app.playerController.setBookNormalizationOverride(activeBook.id, ov)
-                }
-            },
-            onSetBookHidden = { hidden ->
-                if (activeBook != null) {
-                    libraryViewModel.setBookHidden(activeBook.id, hidden)
-                }
-            },
-            onMarkBookFinished = { finished ->
-                if (activeBook != null) {
-                    libraryViewModel.markBookFinished(activeBook.id, finished)
-                }
-            },
-            onResetBookProgress = {
-                if (activeBook != null) {
-                    libraryViewModel.resetBookProgress(activeBook.id)
-                }
-            },
-            onMoveBookToTrash = {
-                if (activeBook != null) {
-                    libraryViewModel.moveToTrash(activeBook.id)
-                }
-            },
-            onAddBookmark = { note ->
-                val book = playerState.currentBook ?: return@FullPlayerSheet
-                val track = playerState.currentTrack ?: return@FullPlayerSheet
-                scope.launch {
-                    app.repository.addBookmark(book.id, track, playerState.positionMs, note)
-                    snackbarHostState.showSnackbar(context.getString(R.string.bookmark_saved))
-                }
-            }
-        )
     }
 }

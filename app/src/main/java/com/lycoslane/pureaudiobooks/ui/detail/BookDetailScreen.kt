@@ -1,17 +1,16 @@
 package com.lycoslane.pureaudiobooks.ui.detail
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,42 +23,33 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BookmarkAdd
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Forward30
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lycoslane.pureaudiobooks.R
@@ -68,12 +58,15 @@ import com.lycoslane.pureaudiobooks.core.audio.PlayerState
 import com.lycoslane.pureaudiobooks.core.database.AudiobookWithTracks
 import com.lycoslane.pureaudiobooks.core.database.BookmarkEntity
 import com.lycoslane.pureaudiobooks.core.database.ChapterTrackEntity
+import com.lycoslane.pureaudiobooks.core.network.BoundedInputStream
 import com.lycoslane.pureaudiobooks.core.network.OnlineBookMatch
-import com.lycoslane.pureaudiobooks.ui.common.BookCoverImage
+import com.lycoslane.pureaudiobooks.core.preferences.AppSettings
 import com.lycoslane.pureaudiobooks.ui.common.Formatters
 import com.lycoslane.pureaudiobooks.ui.common.PureSegmentedControl
 import com.lycoslane.pureaudiobooks.ui.player.PlayerControlPanel
-import com.lycoslane.pureaudiobooks.ui.player.PlayerPrimaryControlsBar
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private enum class BookDetailTab {
     CHAPTERS, BOOKMARKS, INFO
@@ -84,9 +77,8 @@ private enum class BookDetailTab {
 fun BookDetailScreen(
     data: AudiobookWithTracks?,
     bookmarks: List<BookmarkEntity>,
-    globalMonoMode: Int,
-    globalAudioNormalization: Boolean,
-    onlineLookupEnabled: Boolean,
+    globalSettings: AppSettings,
+    initialOpenMetadata: Boolean = false,
     onlineResults: List<OnlineBookMatch>,
     isSearchingOnline: Boolean,
     playerState: PlayerState,
@@ -101,6 +93,7 @@ fun BookDetailScreen(
     onSetTrackMonoOverride: (Long, Int) -> Unit,
     onSetBookMonoOverride: (Int) -> Unit,
     onSetBookNormalizationOverride: (Int) -> Unit,
+    onApplyToAllAudiobooks: () -> Unit,
     onSleepMinutes: (Int) -> Unit,
     onSleepEndOfTrack: (Boolean) -> Unit,
     onAddBookmark: (ChapterTrackEntity, Long, String) -> Unit,
@@ -114,10 +107,14 @@ fun BookDetailScreen(
     onMoveToTrash: () -> Unit,
     onDeleteBookmark: (Long) -> Unit,
     onJumpToBookmark: (ChapterTrackEntity, Long) -> Unit,
+    onEnableOnlineLookup: (String) -> Unit,
     onSearchOnline: (String) -> Unit,
+    onPickGalleryCoverBytes: (ByteArray) -> Unit,
     onResolveMetadata: (String, String, String, String?) -> Unit,
     onSplitByAlbum: () -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val book = data?.audiobook
     val tracks = remember(data?.tracks) {
         Formatters.sortedTracks(data?.tracks.orEmpty())
@@ -126,13 +123,43 @@ fun BookDetailScreen(
     val activePositionMs = playerState.positionMs
     val isPlaying = playerState.isPlaying
 
-    var selectedTab by rememberSaveable { mutableStateOf(BookDetailTab.CHAPTERS) }
+    var selectedTab by rememberSaveable { mutableStateOf<BookDetailTab?>(null) }
     var showMetadataSheet by rememberSaveable { mutableStateOf(false) }
+    var metadataCoverFocusMode by rememberSaveable { mutableStateOf(false) }
+    var handledInitialMetadata by rememberSaveable { mutableStateOf(false) }
+    var showCoverLightbox by rememberSaveable { mutableStateOf(false) }
     var showBookSettingsSheet by rememberSaveable { mutableStateOf(false) }
     var activePanel by rememberSaveable { mutableStateOf(PlayerControlPanel.NONE) }
     var showBookmarkDialog by rememberSaveable { mutableStateOf(false) }
     var bookmarkNote by remember { mutableStateOf("") }
     var chapterOptionsTarget by remember { mutableStateOf<Pair<Int, ChapterTrackEntity>?>(null) }
+
+    LaunchedEffect(initialOpenMetadata, book?.id) {
+        if (initialOpenMetadata && !handledInitialMetadata && book != null) {
+            handledInitialMetadata = true
+            metadataCoverFocusMode = false
+            showMetadataSheet = true
+        }
+    }
+
+    val coverPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch(Dispatchers.IO) {
+                val bytes = runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        BoundedInputStream(input, 8L * 1024 * 1024).use { it.readBytes() }
+                    }
+                }.getOrNull()
+                if (bytes != null && bytes.isNotEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        onPickGalleryCoverBytes(bytes)
+                    }
+                }
+            }
+        }
+    }
 
     val isThisBookActive = book != null && tracks.any { it.id == activeTrackId }
     val isThisBookPlaying = isPlaying && isThisBookActive
@@ -152,7 +179,7 @@ fun BookDetailScreen(
     val currentEffectiveMono = if (isThisBookActive) {
         playerState.effectiveMonoMode
     } else if (book != null) {
-        AudioMonoMode.resolveEffective(globalMonoMode, book.monoModeOverride, currentTrackMonoOverride)
+        AudioMonoMode.resolveEffective(globalSettings.monoMode, book.monoModeOverride, currentTrackMonoOverride)
     } else {
         AudioMonoMode.OFF
     }
@@ -162,7 +189,11 @@ fun BookDetailScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = book?.title.orEmpty(),
+                        text = if (selectedTab == null) {
+                            stringResource(R.string.player_book_short)
+                        } else {
+                            book?.title.orEmpty()
+                        },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -183,193 +214,41 @@ fun BookDetailScreen(
         },
         bottomBar = {
             if (book != null) {
-                val trackPosMs = if (isThisBookActive) playerState.positionMs else (currentTrack?.positionMs ?: 0L)
-                val trackDurMs = if (isThisBookActive && playerState.durationMs > 0L) {
-                    playerState.durationMs
-                } else {
-                    (currentTrack?.durationMs ?: 0L).coerceAtLeast(1L)
-                }
-                var isSeeking by remember { mutableStateOf(false) }
-                var seekSliderValue by remember(trackPosMs) { mutableFloatStateOf(trackPosMs.toFloat()) }
-
-                Surface(
-                    tonalElevation = 6.dp,
-                    shadowElevation = 8.dp,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(horizontal = 16.dp, vertical = 10.dp)
-                    ) {
-                        if (currentTrack != null) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = if (progress.totalTracks > 1) {
-                                        "${stringResource(R.string.chapter_prefix, progress.currentTrackIndex + 1, progress.totalTracks)} · ${currentTrack.title}"
-                                    } else {
-                                        currentTrack.title
-                                    },
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                IconButton(
-                                    onClick = { showBookmarkDialog = true },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.BookmarkAdd,
-                                        contentDescription = stringResource(R.string.add_bookmark),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        PlayerPrimaryControlsBar(
-                            bookId = book.id,
-                            trackId = currentTrack?.id ?: 0L,
-                            playbackSpeed = currentSpeed,
-                            skipSilence = currentSilence,
-                            silenceIntensity = currentSilenceIntensity,
-                            globalMonoMode = globalMonoMode,
-                            bookMonoOverride = book.monoModeOverride,
-                            trackMonoOverride = currentTrackMonoOverride,
-                            effectiveMonoMode = currentEffectiveMono,
-                            sleepTimerRemainingMs = playerState.sleepTimerRemainingMs,
-                            sleepTimerPresetMinutes = playerState.sleepTimerPresetMinutes,
-                            sleepAtEndOfTrack = playerState.sleepAtEndOfTrack,
-                            remainingRawMs = progress.remainingMs,
-                            activePanel = activePanel,
-                            panelAboveTiles = true,
-                            onTogglePanel = { target ->
-                                activePanel = if (activePanel == target) PlayerControlPanel.NONE else target
-                            },
-                            onSetSpeed = onSpeedChange,
-                            onSetSilenceMode = onSilenceChange,
-                            onSetTrackMonoOverride = { mode ->
-                                if (currentTrack != null) onSetTrackMonoOverride(currentTrack.id, mode)
-                            },
-                            onSetBookMonoOverride = onSetBookMonoOverride,
-                            onSetSleepMinutes = onSleepMinutes,
-                            onSetSleepEndOfTrack = onSleepEndOfTrack
-                        )
-
-                        Spacer(Modifier.height(6.dp))
-
-                        Slider(
-                            value = (if (isSeeking) seekSliderValue else trackPosMs.toFloat()).coerceIn(0f, trackDurMs.toFloat()),
-                            onValueChange = {
-                                isSeeking = true
-                                seekSliderValue = it
-                            },
-                            onValueChangeFinished = {
-                                isSeeking = false
-                                if (isThisBookActive) {
-                                    onSeekTo(seekSliderValue.toLong())
-                                } else {
-                                    onPlayBook(currentTrack)
-                                    onSeekTo(seekSliderValue.toLong())
-                                }
-                            },
-                            valueRange = 0f..trackDurMs.toFloat(),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = Formatters.formatDuration(if (isSeeking) seekSliderValue.toLong() else trackPosMs),
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                            Text(
-                                text = Formatters.formatDuration(trackDurMs),
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(
-                                onClick = {
-                                    if (isThisBookActive) onSkipTrack(false)
-                                    else tracks.getOrNull((progress.currentTrackIndex - 1).coerceAtLeast(0))?.let { onPlayBook(it) }
-                                },
-                                enabled = tracks.size > 1
-                            ) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.cd_prev_chapter))
-                            }
-                            IconButton(
-                                onClick = {
-                                    if (isThisBookActive) onSeekBy(-10_000L)
-                                    else {
-                                        onPlayBook(currentTrack)
-                                        onSeekBy(-10_000L)
-                                    }
-                                }
-                            ) {
-                                Icon(Icons.Default.Replay10, contentDescription = stringResource(R.string.cd_rewind_10))
-                            }
-                            FilledIconButton(
-                                onClick = {
-                                    if (isThisBookActive) onTogglePlayPause() else onPlayBook(null)
-                                },
-                                modifier = Modifier.size(56.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (isThisBookPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = stringResource(if (isThisBookPlaying) R.string.cd_pause else R.string.cd_play),
-                                    modifier = Modifier.size(30.dp)
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    if (isThisBookActive) onSeekBy(30_000L)
-                                    else {
-                                        onPlayBook(currentTrack)
-                                        onSeekBy(30_000L)
-                                    }
-                                }
-                            ) {
-                                Icon(Icons.Default.Forward30, contentDescription = stringResource(R.string.cd_forward_30))
-                            }
-                            IconButton(
-                                onClick = {
-                                    if (isThisBookActive) onSkipTrack(true)
-                                    else tracks.getOrNull((progress.currentTrackIndex + 1).coerceAtMost(tracks.lastIndex.coerceAtLeast(0)))?.let { onPlayBook(it) }
-                                },
-                                enabled = tracks.size > 1
-                            ) {
-                                Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.cd_next_chapter))
-                            }
-                        }
-                    }
-                }
+                BookDetailBottomBar(
+                    book = book,
+                    tracks = tracks,
+                    currentTrack = currentTrack,
+                    progress = progress,
+                    playerState = playerState,
+                    isThisBookActive = isThisBookActive,
+                    isThisBookPlaying = isThisBookPlaying,
+                    currentSpeed = currentSpeed,
+                    currentSilence = currentSilence,
+                    currentSilenceIntensity = currentSilenceIntensity,
+                    globalMonoMode = globalSettings.monoMode,
+                    currentTrackMonoOverride = currentTrackMonoOverride,
+                    currentEffectiveMono = currentEffectiveMono,
+                    activePanel = activePanel,
+                    onTogglePanel = { target ->
+                        activePanel = if (activePanel == target) PlayerControlPanel.NONE else target
+                    },
+                    onOpenBookmarkDialog = { showBookmarkDialog = true },
+                    onPlayBook = onPlayBook,
+                    onTogglePlayPause = onTogglePlayPause,
+                    onSeekTo = onSeekTo,
+                    onSeekBy = onSeekBy,
+                    onSkipTrack = onSkipTrack,
+                    onSpeedChange = onSpeedChange,
+                    onSilenceChange = onSilenceChange,
+                    onSetTrackMonoOverride = onSetTrackMonoOverride,
+                    onSetBookMonoOverride = onSetBookMonoOverride,
+                    onSleepMinutes = onSleepMinutes,
+                    onSleepEndOfTrack = onSleepEndOfTrack
+                )
             }
         }
     ) { padding ->
         if (book == null) return@Scaffold
-
-        val effectiveRemainingMs = Formatters.effectiveDurationMs(progress.remainingMs, currentSpeed)
-        val customSpeed = Formatters.hasCustomSpeed(currentSpeed)
-        val effectiveTab = if (selectedTab == BookDetailTab.INFO && book.description.isBlank()) {
-            BookDetailTab.CHAPTERS
-        } else {
-            selectedTab
-        }
 
         Column(
             modifier = Modifier
@@ -378,178 +257,61 @@ fun BookDetailScreen(
                 .padding(horizontal = 16.dp)
         ) {
             if (book.hasTagConflict) {
-                Spacer(Modifier.height(6.dp))
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.errorContainer,
+                Spacer(Modifier.height(4.dp))
+                TagConflictAlertBanner(
+                    onClick = {
+                        metadataCoverFocusMode = false
+                        showMetadataSheet = true
+                    }
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+
+            val tabOptions: List<Pair<BookDetailTab?, String>> = listOf(
+                BookDetailTab.CHAPTERS to stringResource(R.string.tab_chapters, tracks.size),
+                BookDetailTab.BOOKMARKS to stringResource(R.string.tab_bookmarks, bookmarks.size),
+                BookDetailTab.INFO to stringResource(R.string.tab_info)
+            )
+            PureSegmentedControl<BookDetailTab?>(
+                options = tabOptions,
+                selected = selectedTab,
+                onSelect = { chosen ->
+                    selectedTab = if (selectedTab == chosen) null else chosen
+                }
+            )
+            if (selectedTab != null) {
+                Text(
+                    text = stringResource(R.string.tap_active_tab_to_collapse),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { showMetadataSheet = true }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.WarningAmber,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(R.string.tag_conflict_banner_title),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                            Text(
-                                text = stringResource(R.string.tag_conflict_banner_desc),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // Compact Header: Cover + Title + Author
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                BookCoverImage(
-                    url = book.artworkUrl,
-                    contentDescription = book.title,
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .padding(top = 4.dp)
                 )
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = book.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (book.author.isNotBlank()) {
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = book.author,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
             }
-
-            Spacer(Modifier.height(10.dp))
-
-            // Remaining-time & progress card
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Bottom
-                    ) {
-                        val remainingText = if (book.isFinished) {
-                            stringResource(R.string.finished)
-                        } else if (customSpeed) {
-                            stringResource(
-                                R.string.remaining_time_at_speed,
-                                Formatters.formatCompactHoursMinutes(effectiveRemainingMs),
-                                Formatters.formatPlaybackSpeed(currentSpeed)
-                            )
-                        } else {
-                            stringResource(
-                                R.string.remaining_time_compact,
-                                Formatters.formatCompactHoursMinutes(progress.remainingMs)
-                            )
-                        }
-                        Text(
-                            text = remainingText,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = "${(progress.fraction * 100).toInt()}%",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    LinearProgressIndicator(
-                        progress = { progress.fraction },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(5.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = stringResource(
-                                R.string.listened_of_total,
-                                Formatters.formatCompactHoursMinutes(progress.listenedMs),
-                                Formatters.formatCompactHoursMinutes(progress.totalDurationMs)
-                            ),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = if (customSpeed && !book.isFinished) {
-                                stringResource(
-                                    R.string.real_time_remaining,
-                                    Formatters.formatCompactHoursMinutes(progress.remainingMs)
-                                )
-                            } else {
-                                stringResource(R.string.tracks_count, progress.totalTracks)
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(10.dp))
-
-            val tabOptions = buildList {
-                add(BookDetailTab.CHAPTERS to stringResource(R.string.tab_chapters, tracks.size))
-                add(BookDetailTab.BOOKMARKS to stringResource(R.string.tab_bookmarks, bookmarks.size))
-                if (book.description.isNotBlank()) {
-                    add(BookDetailTab.INFO to stringResource(R.string.tab_info))
-                }
-            }
-            PureSegmentedControl(
-                options = tabOptions,
-                selected = effectiveTab,
-                onSelect = { selectedTab = it }
-            )
 
             Spacer(Modifier.height(8.dp))
 
-            when (effectiveTab) {
+            when (selectedTab) {
+                null -> {
+                    FocusedCoverView(
+                        book = book,
+                        progress = progress,
+                        currentSpeed = currentSpeed,
+                        onOpenCoverLightbox = { showCoverLightbox = true },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
                 BookDetailTab.CHAPTERS -> {
+                    CompactBookHeader(
+                        book = book,
+                        progress = progress,
+                        currentSpeed = currentSpeed,
+                        onOpenCoverLightbox = { showCoverLightbox = true }
+                    )
+                    Spacer(Modifier.height(8.dp))
                     LazyColumn(
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(bottom = 12.dp),
@@ -571,6 +333,13 @@ fun BookDetailScreen(
                 }
 
                 BookDetailTab.BOOKMARKS -> {
+                    CompactBookHeader(
+                        book = book,
+                        progress = progress,
+                        currentSpeed = currentSpeed,
+                        onOpenCoverLightbox = { showCoverLightbox = true }
+                    )
+                    Spacer(Modifier.height(8.dp))
                     LazyColumn(
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(bottom = 12.dp),
@@ -605,52 +374,33 @@ fun BookDetailScreen(
                             }
                         } else {
                             items(bookmarks, key = { it.id }) { bm ->
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .clickable {
-                                            val targetTrack = tracks.firstOrNull { it.id == bm.trackId }
-                                            if (targetTrack != null) onJumpToBookmark(targetTrack, bm.positionMs)
-                                        }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "${bm.trackTitle} · ${Formatters.formatDuration(bm.positionMs)}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                            if (bm.note.isNotBlank()) {
-                                                Text(
-                                                    text = bm.note,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                        }
-                                        IconButton(onClick = { onDeleteBookmark(bm.id) }) {
-                                            Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete_permanently))
-                                        }
-                                    }
-                                }
+                                BookmarkRowCard(
+                                    bm = bm,
+                                    onJump = {
+                                        val targetTrack = tracks.firstOrNull { it.id == bm.trackId }
+                                        if (targetTrack != null) onJumpToBookmark(targetTrack, bm.positionMs)
+                                    },
+                                    onDelete = { onDeleteBookmark(bm.id) }
+                                )
                             }
                         }
                     }
                 }
 
                 BookDetailTab.INFO -> {
+                    CompactBookHeader(
+                        book = book,
+                        progress = progress,
+                        currentSpeed = currentSpeed,
+                        onOpenCoverLightbox = { showCoverLightbox = true }
+                    )
+                    Spacer(Modifier.height(8.dp))
                     Column(
                         modifier = Modifier
                             .weight(1f)
                             .verticalScroll(rememberScrollState())
-                            .padding(bottom = 12.dp)
+                            .padding(bottom = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Surface(
                             shape = RoundedCornerShape(12.dp),
@@ -658,17 +408,48 @@ fun BookDetailScreen(
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text(
-                                text = book.description,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(14.dp)
-                            )
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    text = book.description.ifBlank { stringResource(R.string.no_description_available) },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                OutlinedButton(
+                                    onClick = {
+                                        metadataCoverFocusMode = false
+                                        showMetadataSheet = true
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(stringResource(R.string.edit_metadata_and_cover))
+                                }
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    if (showCoverLightbox && book != null) {
+        CoverLightboxDialog(
+            title = book.title,
+            author = book.author,
+            artworkUrl = book.artworkUrl,
+            onDismiss = { showCoverLightbox = false },
+            onSearchOnlineAlternatives = {
+                metadataCoverFocusMode = true
+                showMetadataSheet = true
+            },
+            onPickCoverFromGallery = {
+                coverPickerLauncher.launch("image/*")
+            }
+        )
     }
 
     if (showBookmarkDialog && book != null) {
@@ -728,8 +509,8 @@ fun BookDetailScreen(
         AudiobookSettingsSheet(
             book = book,
             remainingRawMs = progress.remainingMs,
-            globalMonoMode = globalMonoMode,
-            globalAudioNormalization = globalAudioNormalization,
+            globalSettings = globalSettings,
+            progressFraction = progress.fraction,
             onDismiss = { showBookSettingsSheet = false },
             onSetSpeed = onSpeedChange,
             onSetSilenceMode = onSilenceChange,
@@ -748,8 +529,10 @@ fun BookDetailScreen(
                 showBookSettingsSheet = false
                 onMoveToTrash()
             },
+            onApplyToAllAudiobooks = onApplyToAllAudiobooks,
             onEditMetadata = {
                 showBookSettingsSheet = false
+                metadataCoverFocusMode = false
                 showMetadataSheet = true
             }
         )
@@ -758,9 +541,11 @@ fun BookDetailScreen(
     if (showMetadataSheet && book != null) {
         MetadataResolverSheet(
             book = book,
-            onlineLookupEnabled = onlineLookupEnabled,
+            coverFocusMode = metadataCoverFocusMode,
+            onlineLookupEnabled = globalSettings.onlineLookupEnabled,
             onlineResults = onlineResults,
             isSearchingOnline = isSearchingOnline,
+            onEnableOnlineLookup = onEnableOnlineLookup,
             onSearchOnline = onSearchOnline,
             onSplitByAlbum = {
                 showMetadataSheet = false

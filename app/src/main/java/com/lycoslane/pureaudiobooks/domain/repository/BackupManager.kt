@@ -30,6 +30,9 @@ internal class BackupManager(
                 put("trashRetentionHours", s.trashRetentionHours)
                 put("autoMoveFinishedToTrashDays", s.autoMoveFinishedToTrashDays)
                 put("smartRewindSeconds", s.smartRewindSeconds)
+                put("defaultPlaybackSpeed", s.defaultPlaybackSpeed.toDouble())
+                put("defaultSkipSilence", s.defaultSkipSilence)
+                put("defaultSilenceIntensity", s.defaultSilenceIntensity)
                 put("audioNormalizationEnabled", s.audioNormalizationEnabled)
                 put("monoMode", s.monoMode)
                 put("bluetoothNextPrevSeeks", s.bluetoothNextPrevSeeks)
@@ -246,6 +249,16 @@ internal class BackupManager(
         if (s.has("trashRetentionHours")) preferences.setTrashRetentionHours(s.optInt("trashRetentionHours", 48))
         if (s.has("autoMoveFinishedToTrashDays")) preferences.setAutoMoveFinishedToTrashDays(s.optInt("autoMoveFinishedToTrashDays", -1))
         if (s.has("smartRewindSeconds")) preferences.setSmartRewindSeconds(s.optInt("smartRewindSeconds", 10))
+        if (s.has("defaultPlaybackSpeed")) {
+            val sp = s.optDouble("defaultPlaybackSpeed", 1.0)
+            if (sp.isFinite()) preferences.setDefaultPlaybackSpeed(sp.toFloat())
+        }
+        if (s.has("defaultSkipSilence") || s.has("defaultSilenceIntensity")) {
+            preferences.setDefaultSilenceMode(
+                enabled = s.optBoolean("defaultSkipSilence", false),
+                intensity = s.optInt("defaultSilenceIntensity", 1)
+            )
+        }
         if (s.has("audioNormalizationEnabled")) preferences.setAudioNormalizationEnabled(s.optBoolean("audioNormalizationEnabled"))
         if (s.has("monoMode")) preferences.setMonoMode(s.optInt("monoMode", AudioMonoMode.OFF))
         if (s.has("bluetoothNextPrevSeeks")) preferences.setBluetoothNextPrevSeeks(s.optBoolean("bluetoothNextPrevSeeks"))
