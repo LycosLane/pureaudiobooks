@@ -153,8 +153,9 @@
     <string name="settings_online_lookup_desc">Search iTunes &amp; Open Library on demand and save info.txt + cover.jpg locally.</string>
 
     <string name="settings_trash_section">Trash &amp; auto-cleanup</string>
-    <string name="settings_trash_retention">Keep items in trash for</string>
-    <string name="retention_immediate">0h</string>
+    <string name="settings_auto_delete_trash">Auto-delete trash</string>
+    <string name="settings_auto_delete_trash_delay">Delete after</string>
+    <string name="retention_immediate">Immediately</string>
     <string name="retention_24h">24h</string>
     <string name="retention_48h">48h</string>
     <string name="retention_72h">72h</string>

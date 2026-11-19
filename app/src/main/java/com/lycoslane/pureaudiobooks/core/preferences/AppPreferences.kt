@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.update
 data class AppSettings(
     val localFolderUri: String = "",
     val onlineLookupEnabled: Boolean = false, // Opt-in only; offline-first by default
-    val trashRetentionHours: Int = 48, // 0 = immediately, 24 = 24h, 48 = 48h, 72 = 72h
+    val trashRetentionHours: Int = -1, // -1 = off, 0 = immediately, 24 = 24h, 48 = 48h, 72 = 72h
     val autoMoveFinishedToTrashDays: Int = -1, // -1 = never, 0 = immediately, 2 = 2 days, 7 = 7 days
     val smartRewindSeconds: Int = 10, // 0 = off
     val defaultPlaybackSpeed: Float = 1.0f,
@@ -46,8 +46,8 @@ class AppPreferences(context: Context) {
     private fun load(context: Context): AppSettings = AppSettings(
         localFolderUri = prefs.getString(KEY_LOCAL_FOLDER_URI, "") ?: "",
         onlineLookupEnabled = prefs.getBoolean(KEY_ONLINE_LOOKUP_ENABLED, false),
-        trashRetentionHours = prefs.getInt(KEY_TRASH_RETENTION_HOURS, 48).let {
-            if (it in listOf(0, 24, 48, 72)) it else 48
+        trashRetentionHours = prefs.getInt(KEY_TRASH_RETENTION_HOURS, -1).let {
+            if (it in listOf(-1, 0, 24, 48, 72)) it else -1
         },
         autoMoveFinishedToTrashDays = prefs.getInt(KEY_AUTO_TRASH_FINISHED_DAYS, -1).let {
             if (it in listOf(-1, 0, 2, 7)) it else -1
@@ -80,7 +80,7 @@ class AppPreferences(context: Context) {
     }
 
     fun setTrashRetentionHours(hours: Int) {
-        val normalized = if (hours in listOf(0, 24, 48, 72)) hours else 48
+        val normalized = if (hours in listOf(-1, 0, 24, 48, 72)) hours else -1
         prefs.edit().putInt(KEY_TRASH_RETENTION_HOURS, normalized).apply()
         _settings.update { it.copy(trashRetentionHours = normalized) }
     }

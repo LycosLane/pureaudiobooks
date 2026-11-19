@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -92,6 +93,7 @@ fun AudiobookSettingsSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = !startInQuickMode)
     val scope = rememberCoroutineScope()
+    val isExpanded = sheetState.currentValue == SheetValue.Expanded || sheetState.targetValue == SheetValue.Expanded
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -99,7 +101,7 @@ fun AudiobookSettingsSheet(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxSize()
                 .pinchToZoomTextScale(
                     textScale = globalSettings.textScale,
                     onTextScaleChange = onTextScaleChange
@@ -110,7 +112,7 @@ fun AudiobookSettingsSheet(
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (startInQuickMode && sheetState.currentValue != SheetValue.Expanded) {
+            if (startInQuickMode && !isExpanded) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -196,7 +198,7 @@ fun AudiobookSettingsSheet(
                     onMoveToTrash = onMoveToTrash
                 )
 
-                if (sheetState.currentValue != SheetValue.Expanded) {
+                if (!isExpanded) {
                     FilledTonalButton(
                         onClick = { scope.launch { sheetState.expand() } },
                         modifier = Modifier.fillMaxWidth()

@@ -231,4 +231,25 @@ class AudiobookRepositoryTest {
         assertTrue(coverFile.exists())
         assertEquals(4L, coverFile.length())
     }
+
+    @Test
+    fun runTrashMaintenanceRespectsAutoDeleteTrashToggle() = runTest {
+        val expiredTimestamp = System.currentTimeMillis() - 72L * 3600_000L
+        val bookId = dao.insertAudiobook(
+            AudiobookEntity(
+                folderKey = "local://trash-test",
+                folderName = "Trash Test",
+                title = "Trash Test",
+                deletedAtMs = expiredTimestamp
+            )
+        )
+
+        prefs.setTrashRetentionHours(-1)
+        repo.runTrashMaintenance()
+        assertEquals(bookId, dao.getAudiobook(bookId)?.id)
+
+        prefs.setTrashRetentionHours(48)
+        repo.runTrashMaintenance()
+        assertNull(dao.getAudiobook(bookId))
+    }
 }

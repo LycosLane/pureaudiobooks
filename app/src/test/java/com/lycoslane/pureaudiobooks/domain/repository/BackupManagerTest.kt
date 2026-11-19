@@ -216,4 +216,21 @@ class BackupManagerTest {
         assertEquals(1.5f, dao.getAudiobook(bookId)!!.playbackSpeed, 0.001f)
         assertEquals(22_000L, dao.getTracksForAudiobook(bookId).first().positionMs)
     }
+
+    @Test
+    fun backupPreservesAutoDeleteTrashOffAndEnabledStates() = runTest {
+        val manager = BackupManager(dao, preferences)
+
+        preferences.setTrashRetentionHours(48)
+        val enabledJson = manager.exportBackupJson()
+        preferences.setTrashRetentionHours(-1)
+        manager.importBackupJson(enabledJson)
+        assertEquals(48, preferences.settings.value.trashRetentionHours)
+
+        preferences.setTrashRetentionHours(-1)
+        val disabledJson = manager.exportBackupJson()
+        preferences.setTrashRetentionHours(24)
+        manager.importBackupJson(disabledJson)
+        assertEquals(-1, preferences.settings.value.trashRetentionHours)
+    }
 }

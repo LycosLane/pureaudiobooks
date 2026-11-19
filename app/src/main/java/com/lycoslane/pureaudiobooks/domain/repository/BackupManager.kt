@@ -273,7 +273,7 @@ internal class BackupManager(
 
     private fun importSettings(s: JSONObject) {
         if (s.has("onlineLookupEnabled")) preferences.setOnlineLookupEnabled(s.optBoolean("onlineLookupEnabled"))
-        if (s.has("trashRetentionHours")) preferences.setTrashRetentionHours(s.optInt("trashRetentionHours", 48))
+        if (s.has("trashRetentionHours")) preferences.setTrashRetentionHours(s.optInt("trashRetentionHours", -1))
         if (s.has("autoMoveFinishedToTrashDays")) preferences.setAutoMoveFinishedToTrashDays(s.optInt("autoMoveFinishedToTrashDays", -1))
         if (s.has("smartRewindSeconds")) preferences.setSmartRewindSeconds(s.optInt("smartRewindSeconds", 10))
         if (s.has("defaultPlaybackSpeed")) {

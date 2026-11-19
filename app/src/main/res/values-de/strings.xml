@@ -153,8 +153,9 @@
     <string name="settings_online_lookup_desc">Auf Wunsch bei iTunes &amp; Open Library suchen und info.txt + cover.jpg lokal speichern.</string>
 
     <string name="settings_trash_section">Papierkorb &amp; Aufräumen</string>
-    <string name="settings_trash_retention">Im Papierkorb aufbewahren</string>
-    <string name="retention_immediate">0h</string>
+    <string name="settings_auto_delete_trash">Papierkorb automatisch leeren</string>
+    <string name="settings_auto_delete_trash_delay">Löschen nach</string>
+    <string name="retention_immediate">Sofort</string>
     <string name="retention_24h">24h</string>
     <string name="retention_48h">48h</string>
     <string name="retention_72h">72h</string>

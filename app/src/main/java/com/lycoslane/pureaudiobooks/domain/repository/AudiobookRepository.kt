@@ -68,10 +68,12 @@ class AudiobookRepository(
         }
 
         val retentionHours = settings.trashRetentionHours
-        val expireCutoff = now - retentionHours * 60L * 60L * 1000L
-        val expired = dao.getExpiredTrashedAudiobooks(expireCutoff)
-        for (book in expired) {
-            permanentlyDeleteAudiobookInternal(book.id)
+        if (retentionHours >= 0) {
+            val expireCutoff = now - retentionHours * 60L * 60L * 1000L
+            val expired = dao.getExpiredTrashedAudiobooks(expireCutoff)
+            for (book in expired) {
+                permanentlyDeleteAudiobookInternal(book.id)
+            }
         }
     }
 

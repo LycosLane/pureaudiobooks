@@ -459,23 +459,6 @@ fun SettingsScreen(
 
             // 4. Trash & Auto-cleanup
             SettingsSection(title = stringResource(R.string.settings_trash_section)) {
-                Text(
-                    text = stringResource(R.string.settings_trash_retention),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(Modifier.height(8.dp))
-                PureSegmentedControl(
-                    options = listOf(
-                        0 to stringResource(R.string.retention_immediate),
-                        24 to stringResource(R.string.retention_24h),
-                        48 to stringResource(R.string.retention_48h),
-                        72 to stringResource(R.string.retention_72h)
-                    ),
-                    selected = settings.trashRetentionHours,
-                    onSelect = onChangeTrashRetentionHours
-                )
-                SectionDivider()
                 val autoTrashEnabled = settings.autoMoveFinishedToTrashDays >= 0
                 SettingSwitchRow(
                     title = stringResource(R.string.settings_auto_trash_finished),
@@ -500,6 +483,34 @@ fun SettingsScreen(
                         ),
                         selected = settings.autoMoveFinishedToTrashDays,
                         onSelect = onChangeAutoTrashFinishedDays
+                    )
+                }
+                SectionDivider()
+                val autoDeleteTrashEnabled = settings.trashRetentionHours >= 0
+                SettingSwitchRow(
+                    title = stringResource(R.string.settings_auto_delete_trash),
+                    checked = autoDeleteTrashEnabled,
+                    onCheckedChange = { enabled ->
+                        onChangeTrashRetentionHours(if (enabled) 48 else -1)
+                    }
+                )
+                if (autoDeleteTrashEnabled) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.settings_auto_delete_trash_delay),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    PureSegmentedControl(
+                        options = listOf(
+                            0 to stringResource(R.string.retention_immediate),
+                            24 to stringResource(R.string.retention_24h),
+                            48 to stringResource(R.string.retention_48h),
+                            72 to stringResource(R.string.retention_72h)
+                        ),
+                        selected = settings.trashRetentionHours,
+                        onSelect = onChangeTrashRetentionHours
                     )
                 }
             }
