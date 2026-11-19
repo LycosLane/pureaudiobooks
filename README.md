@@ -26,18 +26,19 @@
 ### Metadata & Tag Resolution
 * **Natural Track Sorting:** Ensures `Track 2` always plays before `Track 10`.
 * **Smart Tag Conflict Resolution:** Detects missing, mismatched, or multiple `ALBUM` tags in a folder and lets you choose between folder name, detected tags, custom metadata, or splitting one folder into separate books by Album tag.
-* **Optional Online Metadata Lookup (Off by Default):** Opt-in search via iTunes Audiobook & Open Library APIs using only built-in `HttpURLConnection` + `org.json` with SSRF and HTTPS downgrade protections. Saves results as simple `info.txt` + `cover.jpg` sidecar files in your audiobook folder.
+* **Cover Lightbox & Side-by-Side Online Diff:** Tap covers for a pinch-zoom lightbox with gallery cover picking, and compare multi-candidate iTunes & Open Library search results field-by-field before saving `info.txt` + `cover.jpg` sidecar files.
+* **Chapter Batch Actions:** Tap chapters to mark up to a chapter as finished, reset from a chapter onward, or remove listened chapters cleanly.
 
 ### Playback & Audio DSP
-* **Zero-Friction Resume:** Remembers your last played audiobook across app restarts so you can press Play immediately from the Mini-Player or Library card.
-* **Unified Player Bar:** Fine playback speed (`0.50x` - `3.00x` in `0.02x` steps) with live speed-adjusted remaining time, silence trimming (`Off`, `Soft`, `Medium`, `Strong`), live Mono / Audio-Fix (`L+R`, `Smart`, `L`, `R`), and a flexible sleep timer (`5` - `120` min or end of chapter).
-* **Global & Per-Audiobook Settings:** Configure app-wide defaults in **Global settings**, override speed, silence trimming, volume normalization (`Global | Off | On`), and Mono audio per audiobook in **Audiobook settings**, or fix broken stereo channels per chapter.
+* **Zero-Friction Resume & Larger Mini-Player:** Remembers your last played audiobook across app restarts with a swipe-up mini-player bar to open the full player.
+* **Unified Player Bar:** Fine playback speed (`0.50x` - `3.00x` in `0.02x` steps) with live speed-adjusted remaining time, silence trimming (`Off`, `Soft`, `Medium`, `Strong`), live Stereo / Mono-Fix (`L+R`, `Smart`, `L`, `R`), and a flexible sleep timer (`5` - `120` min or end of chapter).
+* **Symmetric Global & Per-Audiobook Settings:** Configure defaults for speed, silence trimming, volume normalization, Mono audio, and Smart-Rewind after pause globally, override any setting per audiobook with clear `Global` inheritance, expand long-press quick settings into the full sheet, or apply a book's setup to all audiobooks at once.
 * **Bookmarks & Bluetooth:** Save timestamped notes and configure Bluetooth Next/Prev buttons (`-10s` / `+30s` seek or chapter skip).
 
 ### Appearance, Trash & Backup
-* **Light & Dark Themes:** Choose System, Light, or Dark mode, plus 6 curated accent colors separately for Light and Dark mode (Amber default).
-* **Trash & Auto-Cleanup:** Soft-delete audiobooks to an in-app trash with configurable retention (`0h` / `24h` / `48h` / `72h`) and optional auto-cleanup for finished books.
-* **Backup & Localization:** Full JSON backup/restore for progress, per-book audio overrides, bookmarks, themes, and settings. Built-in English and German UI.
+* **Light & Dark Themes & UI Zoom:** Choose System, Light, or Dark mode with separate Light and Dark accents, adjust `Text & UI Zoom` (`80%` - `160%`) globally, and pinch-zoom book info text directly or in the fullscreen reader.
+* **Trash & Auto-Cleanup:** Soft-delete audiobooks to an in-app trash with an explicit `Auto-delete trash` toggle (off by default; `Immediately` / `24h` / `48h` / `72h`) and optional `Auto-move finished books to trash` rules.
+* **Backup & Localization:** Full JSON backup/restore for progress, per-book audio overrides, bookmarks, themes, UI/text zoom, and settings. Built-in English and German UI.
 
 ---
 
