@@ -1,0 +1,9 @@
+PureAudiobooks ist ein uebersichtlicher, datenschutzfreundlicher Hoerbuch-Player und Bibliotheks-Manager fuer Android. Waehle deinen Hoerbuch-Ordner aus, behalte die verbleibende Hoerzeit im Blick und hoere komplett offline ohne Konto, Werbung oder Tracking.
+
+Funktionen:
+- SAF-Ordner-Scan: Waehle beliebige Ordner auf dem Geraet oder der SD-Karte ueber das Android Storage Access Framework. Unterstuetzt flache Ordner, Autoren-Unterordner, Mehr-CD-Huerbuecher sowie MP3, M4B, M4A, AAC, OGG, OPUS, FLAC und WAV.
+- Klare Hoerstatus-Trennung: Trennt Weiterhoeren (mit geschwindigkeitsangepasster Restzeit, Fortschrittsbalken und Direkt-Play/Pause) sauber von Noch nicht gehoert und Fertig.
+- Audio-DSP & Player: Feine Geschwindigkeitseinstellung (0.50x bis 3.00x in 0.02x-Schritten), Pausenkuerzung (Aus, Sanft, Mittel, Stark), Lautstaerke-Normalisierung, Stereo / Mono-Fix (L+R, Smart, L, R) und Schlummer-Timer (5 bis 120 Min. oder Kapitelende).
+- Globale & Lokale Einstellungen: Lege globale Audio-Standards fest und ueberschreibe Tempo, Pausenkuerzung, Normalisierung, Mono-Modus oder Smart-Rewind individuell pro Hoerbuch.
+- Metadaten & Lesezeichen: Natuerliche Kapitelsortierung, Tag-Konfliktloesung, Album-Aufteilung, Lesezeichen mit Notizen und optionale Online-Suche (iTunes und Open Library) mit lokaler Speicherung als info.txt und cover.jpg.
+- Themes, Papierkorb & Backup: System-, Hell- und Dunkel-Modus mit 6 Akzentfarben, Text- und UI-Zoom (80% bis 160%), Papierkorb mit einstellbarer Aufbewahrung sowie komplettes JSON-Backup.

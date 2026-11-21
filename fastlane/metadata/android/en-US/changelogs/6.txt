@@ -1,0 +1,3 @@
+- Added Fastlane store metadata (en-US, de-DE) and Gradle wrapper for F-Droid.
+- Disabled AGP encrypted dependency metadata block for reproducible FOSS builds.
+- Harmonized White Fedora app icon and adaptive launcher icons.

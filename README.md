@@ -4,7 +4,7 @@
 
 # PureAudiobooks
 
-[![Version: 1.1.3](https://img.shields.io/badge/version-1.1.3-amber.svg)](https://github.com/LycosLane/PureAudiobooks/releases)
+[![Version: 1.1.4](https://img.shields.io/badge/version-1.1.4-amber.svg)](https://github.com/LycosLane/PureAudiobooks/releases)
 [![Platform: Android](https://img.shields.io/badge/Platform-Android%2010%2B-0078D6.svg)](https://github.com/LycosLane/PureAudiobooks)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Zero Telemetry](https://img.shields.io/badge/Telemetry-Zero-brightgreen.svg)]()
@@ -49,7 +49,7 @@ Download the latest signed APK from the [**Releases**](https://github.com/LycosL
 ```bash
 git clone https://github.com/LycosLane/PureAudiobooks.git
 cd PureAudiobooks
-gradle assembleDebug
+./gradlew assembleDebug
 ```
 
 ---
