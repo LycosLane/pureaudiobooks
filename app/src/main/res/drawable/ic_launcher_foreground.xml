@@ -4,7 +4,7 @@
     android:height="108dp"
     android:viewportWidth="512"
     android:viewportHeight="512">
-    <!-- B3-Kompakt Warm Amber scaled 0.75x inside 108dp adaptive canvas (within 66dp safe circle) -->
+    <!-- B3-Kompakt Warm Amber (Master 1.22x Fedora) scaled 0.75x inside 108dp adaptive canvas (within 66dp safe circle) -->
     <group
         android:translateX="256"
         android:translateY="252"
@@ -16,37 +16,59 @@
             android:pivotX="256"
             android:pivotY="256"
             android:rotation="-6">
-            <!-- Compact Dual Audio Signal Waves -->
-            <path
-                android:pathData="M 352 184 A 52 52 0 0 1 384 240"
-                android:strokeColor="#FFB020"
-                android:strokeWidth="18"
-                android:strokeLineCap="round" />
-            <path
-                android:pathData="M 368 150 A 90 90 0 0 1 422 242"
-                android:strokeColor="#D97706"
-                android:strokeWidth="18"
-                android:strokeLineCap="round" />
-
-            <!-- Large White Fedora -->
+            <!-- Compact Dual Audio Signal Waves (shifted for 1.22x master fedora) -->
             <group
-                android:translateX="246"
-                android:translateY="232"
-                android:scaleX="1.14"
-                android:scaleY="1.14">
+                android:translateX="18"
+                android:translateY="-10">
+                <path
+                    android:pathData="M 352 184 A 52 52 0 0 1 384 240"
+                    android:strokeColor="#FFB020"
+                    android:strokeWidth="18"
+                    android:strokeLineCap="round" />
+                <path
+                    android:pathData="M 368 150 A 90 90 0 0 1 422 242"
+                    android:strokeColor="#D97706"
+                    android:strokeWidth="18"
+                    android:strokeLineCap="round" />
+            </group>
+
+            <!-- Large White Fedora (Master 1.22x) -->
+            <group
+                android:translateX="256"
+                android:translateY="248"
+                android:scaleX="1.22"
+                android:scaleY="1.22">
                 <group
                     android:translateX="-256"
                     android:translateY="-264">
                     <path
                         android:fillColor="#101216"
                         android:strokeColor="#101216"
-                        android:strokeWidth="16"
+                        android:strokeWidth="24"
                         android:strokeLineJoin="round"
                         android:pathData="M 162 252 L 186 162 L 208 150 L 256 196 L 304 150 L 326 162 L 350 252 Q 256 264 162 252 Z" />
                     <path
                         android:fillColor="#101216"
                         android:strokeColor="#101216"
-                        android:strokeWidth="16"
+                        android:strokeWidth="24"
+                        android:strokeLineJoin="round"
+                        android:pathData="M 220 154 L 256 165 L 292 154 L 256 186 Z" />
+                    <path
+                        android:fillColor="#101216"
+                        android:strokeColor="#101216"
+                        android:strokeWidth="24"
+                        android:strokeLineJoin="round"
+                        android:pathData="M 159 264 Q 232 273 300 269 L 305 305 Q 234 310 151 300 Z" />
+                    <path
+                        android:fillColor="#101216"
+                        android:strokeColor="#101216"
+                        android:strokeWidth="24"
+                        android:strokeLineJoin="round"
+                        android:pathData="M 315 268 Q 334 266 353 264 L 361 300 Q 342 303 320 305 Z" />
+                    <path
+                        android:fillColor="#101216"
+                        android:strokeColor="#101216"
+                        android:strokeWidth="24"
                         android:strokeLineJoin="round"
                         android:pathData="M 86 312 L 150 312 Q 256 326 362 312 L 426 312 C 394 362, 330 384, 256 384 C 182 384, 118 362, 86 312 Z" />
                     <path
