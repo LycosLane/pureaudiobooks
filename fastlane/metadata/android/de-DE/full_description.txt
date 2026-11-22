@@ -1,9 +1,9 @@
-PureAudiobooks ist ein uebersichtlicher, datenschutzfreundlicher Hoerbuch-Player und Bibliotheks-Manager fuer Android. Waehle deinen Hoerbuch-Ordner aus, behalte die verbleibende Hoerzeit im Blick und hoere komplett offline ohne Konto, Werbung oder Tracking.
+PureAudiobooks ist ein 100% freier (FOSS), werbe- und trackingfreier Hoerbuch-Player auf reiner AndroidX-, Jetpack-Compose-, Room-, Media3- und WorkManager-Basis ohne Drittanbieter-Bibliotheken.
 
-Funktionen:
-- SAF-Ordner-Scan: Waehle beliebige Ordner auf dem Geraet oder der SD-Karte ueber das Android Storage Access Framework. Unterstuetzt flache Ordner, Autoren-Unterordner, Mehr-CD-Huerbuecher sowie MP3, M4B, M4A, AAC, OGG, OPUS, FLAC und WAV.
-- Klare Hoerstatus-Trennung: Trennt Weiterhoeren (mit geschwindigkeitsangepasster Restzeit, Fortschrittsbalken und Direkt-Play/Pause) sauber von Noch nicht gehoert und Fertig.
-- Audio-DSP & Player: Feine Geschwindigkeitseinstellung (0.50x bis 3.00x in 0.02x-Schritten), Pausenkuerzung (Aus, Sanft, Mittel, Stark), Lautstaerke-Normalisierung, Stereo / Mono-Fix (L+R, Smart, L, R) und Schlummer-Timer (5 bis 120 Min. oder Kapitelende).
-- Globale & Lokale Einstellungen: Lege globale Audio-Standards fest und ueberschreibe Tempo, Pausenkuerzung, Normalisierung, Mono-Modus oder Smart-Rewind individuell pro Hoerbuch.
-- Metadaten & Lesezeichen: Natuerliche Kapitelsortierung, Tag-Konfliktloesung, Album-Aufteilung, Lesezeichen mit Notizen und optionale Online-Suche (iTunes und Open Library) mit lokaler Speicherung als info.txt und cover.jpg.
-- Themes, Papierkorb & Backup: System-, Hell- und Dunkel-Modus mit 6 Akzentfarben, Text- und UI-Zoom (80% bis 160%), Papierkorb mit einstellbarer Aufbewahrung sowie komplettes JSON-Backup.
+Was PureAudiobooks von Voice oder AudioAnchor unterscheidet:
+- Live Stereo / Mono-Fix (L+R, Smart, L, R): Repariert fehlerhafte Einkanal-Aufnahmen oder Phasenausloeschungen pro Kapitel, pro Buch oder global - ohne systemweites Mono.
+- Tag-Konfliktloesung & Album-Splitter: Erkennt fehlende oder gemischte ALBUM-Tags und teilt Sammelordner auf Wunsch direkt anhand des Album-Tags in einzelne Hoerbuecher auf.
+- Feld-fuer-Feld-Metadaten-Diff: Optionale Online-Suche bei iTunes und Open Library mit direktem Vorher/Nachher-Vergleich und lokaler Speicherung als info.txt und cover.jpg.
+- Zweistufiger Papierkorb & Auto-Aufraeumen: Papierkorb mit einstellbarer Aufbewahrung (Sofort, 24h, 48h, 72h) sowie optionales automatisches Verschieben gehoerter Buecher.
+- 5 symmetrische Audio-Overrides: Tempo (0.50x bis 3.00x mit geschwindigkeitsangepasster Restzeit), Pausenkuerzung, Normalisierung, Mono-Modus und Smart-Rewind global, pro Buch oder fuer alle Buecher uebernehmen.
+- SAF-Ordner-Scan, Lesezeichen & JSON-Backup: Unterstuetzt flache, Autoren- und Mehr-CD-Ordner (MP3, M4B, M4A, AAC, OGG, OPUS, FLAC, WAV), Text-/UI-Zoom (80% bis 160%) und Deutsch/Englisch.

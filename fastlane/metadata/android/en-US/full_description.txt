@@ -1,9 +1,9 @@
-PureAudiobooks is a straightforward, privacy-first audiobook player and library manager for Android. Point it at your audiobook folder, track remaining listening time at a glance, and listen offline without accounts, ads, or tracking.
+PureAudiobooks is a 100% FOSS, ad-free, tracker-free audiobook player built purely on AndroidX, Jetpack Compose, Room, Media3, and WorkManager with zero third-party dependencies.
 
-Features:
-- SAF Folder Scanning: Pick any folder on internal storage or SD card via Android Storage Access Framework. Supports flat folders, author subfolders, multi-disc sets, and MP3, M4B, M4A, AAC, OGG, OPUS, FLAC, and WAV.
-- Clear Listening States: Separates Continue listening (with speed-adjusted remaining time, progress bar, and 1-tap Play/Pause) from Not started and Finished books.
-- Audio DSP & Unified Player: Fine playback speed (0.50x to 3.00x in 0.02x steps), silence trimming (Off, Soft, Medium, Strong), volume normalization, live Stereo / Mono-Fix (L+R, Smart, L, R), and sleep timer (5 to 120 min or end of chapter).
-- Global & Per-Book Overrides: Set global audio defaults and override speed, silence trimming, normalization, Mono mode, or smart rewind per audiobook.
-- Metadata & Tag Resolution: Natural track sorting, tag conflict detection, album splitting, bookmarks with notes, and optional on-demand iTunes and Open Library metadata lookup saved locally as info.txt and cover.jpg.
-- Themes, Trash & Backup: System, Light, and Dark themes with 6 accent colors, UI and text zoom (80% to 160%), soft-delete trash with configurable retention, and full JSON backup and restore.
+What makes PureAudiobooks different from Voice or AudioAnchor:
+- Live Stereo / Mono-Fix (L+R, Smart, L, R): Repair broken single-channel audiobook rips or phase cancellation per chapter, per book, or globally, without forcing system-wide Mono audio.
+- Smart Album-Tag Conflict Resolver & Splitter: Detects missing or mixed ALBUM tags in a folder and lets you choose folder names, tags, custom metadata, or split a multi-book folder into separate audiobooks by Album tag.
+- Side-by-Side Online Metadata Diff: Optionally query iTunes and Open Library on demand, compare candidates field-by-field before applying, and save portable info.txt and cover.jpg sidecar files locally.
+- 2-Stage Trash & Auto-Move Finished Books: Soft-delete books to an in-app trash with configurable retention (Immediate, 24h, 48h, 72h) and optional auto-move rules for finished books.
+- Symmetric 5-Setting Audio Overrides: Configure playback speed (0.50x to 3.00x in 0.02x steps with live speed-adjusted remaining time), silence trimming, normalization, Mono mode, and smart rewind globally or per book, with 1-tap Apply to all.
+- SAF Folder Scanning, Bookmarks & Full JSON Backup: Supports flat, author, and multi-disc folders (MP3, M4B, M4A, AAC, OGG, OPUS, FLAC, WAV), UI/text zoom (80% to 160%), and English/German UI.
