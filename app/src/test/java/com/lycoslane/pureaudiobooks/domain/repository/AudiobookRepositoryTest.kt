@@ -252,4 +252,85 @@ class AudiobookRepositoryTest {
         repo.runTrashMaintenance()
         assertNull(dao.getAudiobook(bookId))
     }
+
+    @Test
+    fun splitAudiobookByAlbumTagMigratesBookmarksToSplitBooks() = runTest {
+        val bookId = dao.insertAudiobook(
+            AudiobookEntity(
+                folderKey = "local://split-src",
+                folderDocId = "split-doc",
+                folderUri = "content://tree/root",
+                folderName = "Anthology",
+                title = "Anthology"
+            )
+        )
+        dao.insertTracks(
+            listOf(
+                ChapterTrackEntity(
+                    audiobookId = bookId,
+                    guid = "sp-1",
+                    title = "Book A - Ch 1",
+                    sortOrder = 0,
+                    trackNumber = 1,
+                    fileUri = "content://split/1",
+                    albumTag = "Book Alpha",
+                    artistTag = "Author One",
+                    durationMs = 60_000L
+                ),
+                ChapterTrackEntity(
+                    audiobookId = bookId,
+                    guid = "sp-2",
+                    title = "Book B - Ch 1",
+                    sortOrder = 1,
+                    trackNumber = 2,
+                    fileUri = "content://split/2",
+                    albumTag = "Book Beta",
+                    artistTag = "Author Two",
+                    durationMs = 90_000L
+                )
+            )
+        )
+        val tracks = dao.getTracksForAudiobook(bookId)
+        dao.insertBookmark(
+            BookmarkEntity(
+                audiobookId = bookId,
+                trackId = tracks[0].id,
+                trackTitle = tracks[0].title,
+                positionMs = 12_345L,
+                note = "Alpha mark",
+                createdAtMs = 100L
+            )
+        )
+        dao.insertBookmark(
+            BookmarkEntity(
+                audiobookId = bookId,
+                trackId = tracks[1].id,
+                trackTitle = tracks[1].title,
+                positionMs = 54_321L,
+                note = "Beta mark",
+                createdAtMs = 200L
+            )
+        )
+
+        val created = repo.splitAudiobookByAlbumTag(bookId)
+        assertEquals(2, created)
+        assertNull(dao.getAudiobook(bookId))
+
+        val alphaBook = dao.getAudiobookByFolderKey("local://split-doc::Book Alpha")!!
+        val betaBook = dao.getAudiobookByFolderKey("local://split-doc::Book Beta")!!
+        val alphaTracks = dao.getTracksForAudiobook(alphaBook.id)
+        val betaTracks = dao.getTracksForAudiobook(betaBook.id)
+
+        val alphaBookmarks = dao.getBookmarksForAudiobookOnce(alphaBook.id)
+        val betaBookmarks = dao.getBookmarksForAudiobookOnce(betaBook.id)
+        assertEquals(1, alphaBookmarks.size)
+        assertEquals(alphaTracks[0].id, alphaBookmarks[0].trackId)
+        assertEquals(12_345L, alphaBookmarks[0].positionMs)
+        assertEquals("Alpha mark", alphaBookmarks[0].note)
+
+        assertEquals(1, betaBookmarks.size)
+        assertEquals(betaTracks[0].id, betaBookmarks[0].trackId)
+        assertEquals(54_321L, betaBookmarks[0].positionMs)
+        assertEquals("Beta mark", betaBookmarks[0].note)
+    }
 }

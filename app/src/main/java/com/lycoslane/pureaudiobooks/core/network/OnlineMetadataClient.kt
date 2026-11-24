@@ -1,5 +1,7 @@
 package com.lycoslane.pureaudiobooks.core.network
 
+import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -16,6 +18,7 @@ data class OnlineBookMatch(
 
 object OnlineMetadataClient {
 
+    private const val TAG = "OnlineMetadataClient"
     private const val MAX_JSON_BYTES = 2L * 1024 * 1024 // 2 MB
     private const val MAX_IMAGE_BYTES = 8L * 1024 * 1024 // 8 MB
 
@@ -24,8 +27,20 @@ object OnlineMetadataClient {
         if (clean.isBlank()) return@withContext emptyList()
 
         val results = mutableListOf<OnlineBookMatch>()
-        runCatching { results += searchItunesAudiobooks(clean) }
-        runCatching { results += searchOpenLibrary(clean) }
+        try {
+            results += searchItunesAudiobooks(clean)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "iTunes metadata search failed for '$clean'", e)
+        }
+        try {
+            results += searchOpenLibrary(clean)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Open Library metadata search failed for '$clean'", e)
+        }
         deduplicateMatches(results)
     }
 
@@ -123,7 +138,10 @@ object OnlineMetadataClient {
             )
             if (conn.responseCode !in 200..299) return@withContext null
             BoundedInputStream(conn.inputStream, MAX_IMAGE_BYTES).use { it.readBytes() }
-        } catch (_: Exception) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to download cover from $coverUrl", e)
             null
         } finally {
             conn?.disconnect()

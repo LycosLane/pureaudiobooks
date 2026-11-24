@@ -236,4 +236,49 @@ class BackupManagerTest {
         manager.importBackupJson(disabledJson)
         assertEquals(-1, preferences.settings.value.trashRetentionHours)
     }
+
+    @Test
+    fun importClearsLastTrackIdWhenBackupBookIsUnplayed() = runTest {
+        val bookId = dao.insertAudiobook(
+            AudiobookEntity(
+                folderKey = "local://reset-last",
+                folderName = "Reset Last",
+                title = "Reset Last"
+            )
+        )
+        dao.insertTracks(
+            listOf(
+                ChapterTrackEntity(
+                    audiobookId = bookId,
+                    guid = "rl-tr1",
+                    title = "Track 1",
+                    fileUri = "content://rl/1"
+                )
+            )
+        )
+        val track = dao.getTracksForAudiobook(bookId).first()
+        dao.updateLastTrack(bookId, track.id, 99_999L)
+
+        val unplayedBackup = """
+            {
+              "version": 2,
+              "books": [
+                {
+                  "folderKey": "local://reset-last",
+                  "lastPlayedAtMs": 0,
+                  "tracks": [
+                    { "guid": "rl-tr1", "positionMs": 0, "isFinished": false }
+                  ]
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val manager = BackupManager(dao, preferences)
+        val count = manager.importBackupJson(unplayedBackup)
+        assertEquals(1, count)
+        val updated = dao.getAudiobook(bookId)!!
+        assertEquals(0L, updated.lastTrackId)
+        assertEquals(0L, updated.lastPlayedAtMs)
+    }
 }

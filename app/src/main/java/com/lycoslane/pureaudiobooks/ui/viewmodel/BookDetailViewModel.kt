@@ -10,6 +10,8 @@ import com.lycoslane.pureaudiobooks.core.database.ChapterTrackEntity
 import com.lycoslane.pureaudiobooks.core.network.OnlineBookMatch
 import com.lycoslane.pureaudiobooks.core.network.OnlineMetadataClient
 import com.lycoslane.pureaudiobooks.ui.common.Formatters
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -35,17 +37,32 @@ class BookDetailViewModel(
 
     private val _isSearchingOnline = MutableStateFlow(false)
     val isSearchingOnline: StateFlow<Boolean> = _isSearchingOnline.asStateFlow()
+    private var searchJob: Job? = null
 
-    fun playBook(specificTrack: ChapterTrackEntity? = null) {
+    fun playBook(
+        specificTrack: ChapterTrackEntity? = null,
+        startPositionMs: Long? = null,
+        forcePlay: Boolean = false
+    ) {
         val data = bookWithTracks.value ?: return
         val sortedTracks = Formatters.sortedTracks(data.tracks)
-        app.playerController.playAudiobook(data.audiobook, sortedTracks, specificTrack)
+        app.playerController.playAudiobook(
+            book = data.audiobook,
+            tracks = sortedTracks,
+            specificTrack = specificTrack,
+            startPositionMs = startPositionMs,
+            forcePlay = forcePlay
+        )
     }
 
     fun setTrackFinished(trackId: Long, finished: Boolean) {
         viewModelScope.launch {
+            val activeTrackId = app.playerController.state.value.currentTrack?.id
+            if (finished && activeTrackId == trackId) {
+                app.playerController.stopIfPlayingBook(audiobookId)
+            }
             repo.setTrackFinished(trackId, finished)
-            app.playerController.refreshCurrentBookMetadata(audiobookId)
+            app.playerController.reconcileActiveBook()
         }
     }
 
@@ -70,8 +87,20 @@ class BookDetailViewModel(
 
     fun markTracksFromUnfinished(trackId: Long) {
         viewModelScope.launch {
+            val data = bookWithTracks.value
+            val activeTrackId = app.playerController.state.value.currentTrack?.id
+            val affectsPlaying = if (data != null && activeTrackId != null) {
+                val sorted = Formatters.sortedTracks(data.tracks)
+                val idx = sorted.indexOfFirst { it.id == trackId }
+                idx >= 0 && sorted.subList(idx, sorted.size).any { it.id == activeTrackId }
+            } else false
+            if (affectsPlaying) {
+                app.playerController.stopIfPlayingBook(audiobookId)
+            }
             repo.markTracksFromUnfinished(audiobookId, trackId)
-            app.playerController.refreshCurrentBookMetadata(audiobookId)
+            if (!affectsPlaying) {
+                app.playerController.refreshCurrentBookMetadata(audiobookId)
+            }
         }
     }
 
@@ -150,9 +179,10 @@ class BookDetailViewModel(
         app.playerController.setBookNormalizationOverride(audiobookId, override)
     }
 
-    fun addBookmark(track: ChapterTrackEntity, positionMs: Long, note: String) {
+    fun addBookmark(track: ChapterTrackEntity, positionMs: Long, note: String, onDone: () -> Unit = {}) {
         viewModelScope.launch {
             repo.addBookmark(audiobookId, track, positionMs, note)
+            onDone()
         }
     }
 
@@ -165,10 +195,10 @@ class BookDetailViewModel(
         author: String,
         description: String,
         onlineCoverUrl: String? = null,
-        onDone: () -> Unit = {}
+        onDone: (coverFailed: Boolean) -> Unit = {}
     ) {
         viewModelScope.launch {
-            repo.resolveBookMetadata(
+            val coverOk = repo.resolveBookMetadata(
                 audiobookId = audiobookId,
                 title = title,
                 author = author,
@@ -177,7 +207,7 @@ class BookDetailViewModel(
                 writeSidecarFiles = true
             )
             app.playerController.refreshCurrentBookMetadata(audiobookId)
-            onDone()
+            onDone(!coverOk)
         }
     }
 
@@ -215,17 +245,27 @@ class BookDetailViewModel(
 
     fun searchOnline(query: String) {
         if (!app.preferences.settings.value.onlineLookupEnabled) return
-        viewModelScope.launch {
-            _isSearchingOnline.value = true
+        searchJob?.cancel()
+        _isSearchingOnline.value = true
+        lateinit var currentJob: Job
+        currentJob = viewModelScope.launch {
             try {
                 _onlineResults.value = OnlineMetadataClient.search(query)
+            } catch (e: CancellationException) {
+                throw e
             } finally {
-                _isSearchingOnline.value = false
+                if (searchJob === currentJob) {
+                    _isSearchingOnline.value = false
+                }
             }
         }
+        searchJob = currentJob
     }
 
     fun clearOnlineResults() {
+        searchJob?.cancel()
+        searchJob = null
+        _isSearchingOnline.value = false
         _onlineResults.value = emptyList()
     }
 }

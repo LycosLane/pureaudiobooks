@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.DocumentsContract
+import android.util.Log
 import com.lycoslane.pureaudiobooks.core.database.AudiobookEntity
 import com.lycoslane.pureaudiobooks.core.database.ChapterTrackEntity
 import com.lycoslane.pureaudiobooks.core.database.PureAudiobooksDao
@@ -14,8 +15,9 @@ import java.security.MessageDigest
 
 object LocalAudiobookScanner {
 
+    private const val TAG = "LocalAudiobookScanner"
     private val AUDIO_EXTENSIONS = setOf("mp3", "m4b", "m4a", "aac", "ogg", "opus", "flac", "wav")
-    private val COVER_FILENAMES = setOf(
+    private val COVER_FILENAMES = listOf(
         "cover.jpg", "cover.jpeg", "cover.png",
         "folder.jpg", "folder.jpeg", "folder.png",
         "artwork.jpg", "artwork.jpeg", "artwork.png"
@@ -66,6 +68,8 @@ object LocalAudiobookScanner {
         if (!docUriString.startsWith("content://")) return false
         return runCatching {
             DocumentsContract.deleteDocument(context.contentResolver, Uri.parse(docUriString))
+        }.onFailure {
+            Log.w(TAG, "Failed to delete local document $docUriString", it)
         }.getOrDefault(false)
     }
 
@@ -88,7 +92,7 @@ object LocalAudiobookScanner {
 
         val rootName = queryDocumentName(context, treeUri, rootDocId).orEmpty()
         val candidates = mutableListOf<BookFolderCandidate>()
-        collectBookFolders(
+        val scanComplete = collectBookFolders(
             context = context,
             treeUri = treeUri,
             folderDocId = rootDocId,
@@ -97,6 +101,10 @@ object LocalAudiobookScanner {
             depth = 0,
             out = candidates
         )
+        if (!scanComplete) {
+            Log.w(TAG, "Aborting library sync cleanup due to SAF query error for $treeUriString")
+            return@withContext 0
+        }
 
         val discoveredKeys = mutableSetOf<String>()
         var syncedCount = 0
@@ -192,9 +200,9 @@ object LocalAudiobookScanner {
         parentFolderName: String,
         depth: Int,
         out: MutableList<BookFolderCandidate>
-    ) {
-        if (depth > 3) return
-        val children = queryChildren(context, treeUri, folderDocId) ?: return
+    ): Boolean {
+        if (depth > 3) return true
+        val children = queryChildren(context, treeUri, folderDocId) ?: return false
         val directAudio = children.filter { !it.isDirectory && isAudioFile(it) }
         val subdirs = children.filter { it.isDirectory }
 
@@ -205,7 +213,7 @@ object LocalAudiobookScanner {
 
             val collectedAudio = directAudio.toMutableList()
             for (discDir in discSubdirs) {
-                val discChildren = queryChildren(context, treeUri, discDir.docId).orEmpty()
+                val discChildren = queryChildren(context, treeUri, discDir.docId) ?: return false
                 discChildren
                     .filter { !it.isDirectory && isAudioFile(it) }
                     .forEach { entry ->
@@ -224,15 +232,18 @@ object LocalAudiobookScanner {
             }
 
             for (sub in otherSubdirs) {
-                collectBookFolders(
-                    context = context,
-                    treeUri = treeUri,
-                    folderDocId = sub.docId,
-                    folderName = sub.name,
-                    parentFolderName = folderName,
-                    depth = depth + 1,
-                    out = out
-                )
+                if (!collectBookFolders(
+                        context = context,
+                        treeUri = treeUri,
+                        folderDocId = sub.docId,
+                        folderName = sub.name,
+                        parentFolderName = folderName,
+                        depth = depth + 1,
+                        out = out
+                    )
+                ) {
+                    return false
+                }
             }
         } else {
             // Depth 0 (root): any audio files directly in root become one book, plus recurse into subdirs
@@ -246,17 +257,21 @@ object LocalAudiobookScanner {
                 )
             }
             for (sub in subdirs) {
-                collectBookFolders(
-                    context = context,
-                    treeUri = treeUri,
-                    folderDocId = sub.docId,
-                    folderName = sub.name,
-                    parentFolderName = "",
-                    depth = 1,
-                    out = out
-                )
+                if (!collectBookFolders(
+                        context = context,
+                        treeUri = treeUri,
+                        folderDocId = sub.docId,
+                        folderName = sub.name,
+                        parentFolderName = "",
+                        depth = 1,
+                        out = out
+                    )
+                ) {
+                    return false
+                }
             }
         }
+        return true
     }
 
     fun computeContentFingerprint(
@@ -291,6 +306,8 @@ object LocalAudiobookScanner {
                 digest.update(buf, 0, total)
                 digest.digest().joinToString("") { "%02x".format(it) }
             }.orEmpty()
+        }.onFailure {
+            Log.w(TAG, "Failed to read file header hash for $uri", it)
         }.getOrDefault("")
     }
 
@@ -373,9 +390,9 @@ object LocalAudiobookScanner {
             }
             val keepUserMeta = existing.metadataLockedByUser && (sidecarInfo == null || sidecarInfo.isEmpty)
             val nextTitle = when {
-                forcedTitle != null -> forcedTitle
                 sidecarInfo != null && sidecarInfo.title.isNotBlank() -> sidecarInfo.title
                 keepUserMeta -> existing.title
+                forcedTitle != null -> forcedTitle
                 else -> analysis.suggestedTitle
             }
             val nextAuthor = when {
@@ -387,7 +404,15 @@ object LocalAudiobookScanner {
                 sidecarInfo != null && sidecarInfo.description.isNotBlank() -> sidecarInfo.description
                 else -> existing.description
             }
-            val nextArt = coverUri.ifBlank { existing.artworkUrl }
+            val hasExistingValidArt = existing.artworkUrl.isNotBlank() && (
+                existing.artworkUrl.startsWith("content://") ||
+                    File(existing.artworkUrl.removePrefix("file://")).exists()
+                )
+            val nextArt = if (existing.metadataLockedByUser && hasExistingValidArt) {
+                existing.artworkUrl
+            } else {
+                coverUri.ifBlank { existing.artworkUrl }
+            }
             val nextConflict = when {
                 forcedTitle != null -> false
                 sidecarInfo != null && sidecarInfo.title.isNotBlank() -> false
@@ -505,7 +530,8 @@ object LocalAudiobookScanner {
                 trackNumber = trackNum,
                 durationMs = durationMs
             )
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to extract audio metadata for ${doc.uri}", e)
             ScannedAudioMeta("", "", "", 0, 0L)
         } finally {
             runCatching { retriever.release() }
@@ -518,8 +544,8 @@ object LocalAudiobookScanner {
         children: List<DocEntry>,
         audioFiles: List<DocEntry>
     ): String {
-        val imageDoc = children.firstOrNull {
-            !it.isDirectory && it.name.lowercase() in COVER_FILENAMES
+        val imageDoc = COVER_FILENAMES.firstNotNullOfOrNull { targetName ->
+            children.firstOrNull { !it.isDirectory && it.name.equals(targetName, ignoreCase = true) }
         } ?: children.firstOrNull {
             !it.isDirectory && it.mimeType.startsWith("image/")
         }
@@ -541,7 +567,8 @@ object LocalAudiobookScanner {
             if (bytes.size > 8 * 1024 * 1024) return null
             target.writeBytes(bytes)
             target.absolutePath
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to extract embedded cover from $audioUri", e)
             null
         } finally {
             runCatching { retriever.release() }
@@ -585,7 +612,8 @@ object LocalAudiobookScanner {
                 }
                 result
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w(TAG, "SAF queryChildren failed for $parentDocId", e)
             null
         }
     }
@@ -597,6 +625,8 @@ object LocalAudiobookScanner {
             context.contentResolver.query(docUri, projection, null, null, null)?.use { cursor ->
                 if (cursor.moveToFirst()) cursor.getString(0) else null
             }
+        }.onFailure {
+            Log.w(TAG, "SAF queryDocumentName failed for $docId", it)
         }.getOrNull()
     }
 

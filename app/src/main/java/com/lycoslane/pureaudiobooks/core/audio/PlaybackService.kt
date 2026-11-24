@@ -6,12 +6,14 @@ import android.media.audiofx.DynamicsProcessing
 import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -54,6 +56,7 @@ class PlaybackService : MediaSessionService() {
     private lateinit var player: ExoPlayer
     private var positionSaveJob: Job? = null
     private var skipTrackJob: Job? = null
+    private var resolveAudioJob: Job? = null
     private var lastPausedElapsedMs: Long = 0L
 
     private var dynamicsProcessing: DynamicsProcessing? = null
@@ -183,6 +186,10 @@ class PlaybackService : MediaSessionService() {
         }
 
         player.addListener(object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                Log.e(TAG, "ExoPlayer error (${error.errorCodeName}): ${error.message}", error)
+            }
+
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 currentAudioSessionId = audioSessionId
                 applyAudioNormalization(currentEffectiveNormalization)
@@ -227,12 +234,22 @@ class PlaybackService : MediaSessionService() {
                             withContext(Dispatchers.Main) {
                                 playTrackDirect(nextTrack.id, resumeWithRewind = false)
                             }
+                        } else if (nextTrack != null && stopForSleep) {
+                            lastTrackPrefs().edit().putLong(KEY_LAST_TRACK_ID, nextTrack.id).apply()
+                            dao.updateLastTrack(track.audiobookId, nextTrack.id, now)
+                            withContext(Dispatchers.Main) {
+                                prepareTrackPaused(nextTrack.id)
+                            }
                         } else if (nextTrack == null) {
                             dao.setAudiobookFinished(track.audiobookId, true, now)
                             lastTrackPrefs().edit().remove(KEY_LAST_TRACK_ID).apply()
                             val autoTrashDays = app.preferences.settings.value.autoMoveFinishedToTrashDays
                             if (autoTrashDays == 0) {
                                 dao.setDeletedAt(track.audiobookId, now)
+                                withContext(Dispatchers.Main) {
+                                    player.stop()
+                                    player.clearMediaItems()
+                                }
                             }
                         }
                     }
@@ -273,6 +290,7 @@ class PlaybackService : MediaSessionService() {
                             .add(SessionCommand(CMD_SKIP_BOOK_TRACK_NEXT, Bundle.EMPTY))
                             .add(SessionCommand(CMD_SKIP_BOOK_TRACK_PREV, Bundle.EMPTY))
                             .add(SessionCommand(CMD_SET_SLEEP_END_OF_TRACK, Bundle.EMPTY))
+                            .add(SessionCommand(CMD_SET_SMART_REWIND, Bundle.EMPTY))
                             .build()
                         MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                             .setAvailableSessionCommands(sessionCommands)
@@ -338,6 +356,7 @@ class PlaybackService : MediaSessionService() {
                                 )
                             }
                         } catch (e: Exception) {
+                            Log.e(TAG, "onPlaybackResumption failed", e)
                             future.setException(e)
                         }
                     }
@@ -400,6 +419,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun resolveAndApplyCurrentAudioSettings() {
+        resolveAudioJob?.cancel()
         val app = applicationContext as PureAudiobooksApplication
         val global = app.preferences.settings.value
         val trackId = player.currentMediaItem?.mediaId?.toLongOrNull()
@@ -412,7 +432,7 @@ class PlaybackService : MediaSessionService() {
             applyAudioNormalization(currentEffectiveNormalization)
             return
         }
-        serviceScope.launch {
+        resolveAudioJob = serviceScope.launch {
             val pair = withContext(Dispatchers.IO) {
                 PureAudiobooksDatabase.getInstance(applicationContext).dao().getTrackWithAudiobook(trackId)
             }
@@ -466,8 +486,10 @@ class PlaybackService : MediaSessionService() {
         val dp = dynamicsProcessing ?: return
         try {
             runCatching { dp.enabled = false }
+                .onFailure { Log.w(TAG, "Failed to disable DynamicsProcessing", it) }
         } finally {
             runCatching { dp.release() }
+                .onFailure { Log.w(TAG, "Failed to release DynamicsProcessing", it) }
             dynamicsProcessing = null
             attachedAudioSessionId = C.AUDIO_SESSION_ID_UNSET
         }
@@ -499,6 +521,7 @@ class PlaybackService : MediaSessionService() {
             }
             dynamicsProcessing?.enabled = true
         }.onFailure {
+            Log.w(TAG, "Failed to apply audio normalization for session $currentAudioSessionId", it)
             releaseDynamicsProcessing()
         }
     }
@@ -534,7 +557,7 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    private fun playTrackDirect(trackId: Long, resumeWithRewind: Boolean) {
+    private fun playTrackDirect(trackId: Long, resumeWithRewind: Boolean, autoPlay: Boolean = true) {
         skipTrackJob?.cancel()
         skipTrackJob = serviceScope.launch {
             val dao = PureAudiobooksDatabase.getInstance(applicationContext).dao()
@@ -560,7 +583,7 @@ class PlaybackService : MediaSessionService() {
             } else {
                 0L
             }
-            val startPos = (pair.track.positionMs - rewindMs).coerceAtLeast(0L)
+            val startPos = if (autoPlay) (pair.track.positionMs - rewindMs).coerceAtLeast(0L) else 0L
             val effectiveMono = AudioMonoMode.resolveEffective(
                 globalMonoMode = globalSettings.monoMode,
                 bookMonoOverride = pair.audiobook.monoModeOverride,
@@ -578,12 +601,20 @@ class PlaybackService : MediaSessionService() {
             currentEffectiveNormalization = effectiveNorm
             applyAudioNormalization(effectiveNorm)
             player.prepare()
-            player.play()
+            if (autoPlay) {
+                player.play()
+            } else {
+                player.pause()
+            }
             lastTrackPrefs().edit().putLong(KEY_LAST_TRACK_ID, pair.track.id).apply()
             withContext(Dispatchers.IO) {
                 dao.updateLastTrack(pair.audiobook.id, pair.track.id, System.currentTimeMillis())
             }
         }
+    }
+
+    private fun prepareTrackPaused(trackId: Long) {
+        playTrackDirect(trackId = trackId, resumeWithRewind = false, autoPlay = false)
     }
 
     private fun buildMediaItem(track: ChapterTrackEntity, book: AudiobookEntity): MediaItem? {
@@ -636,7 +667,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun saveCurrentPosition() {
-        if (player.playbackState == Player.STATE_ENDED) return
+        val state = player.playbackState
+        if (state != Player.STATE_READY && state != Player.STATE_BUFFERING) return
         val trackId = player.currentMediaItem?.mediaId?.toLongOrNull() ?: return
         val pos = player.currentPosition.coerceAtLeast(0L)
         serviceScope.launch(Dispatchers.IO) {
@@ -647,7 +679,9 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         positionSaveJob?.cancel()
         skipTrackJob?.cancel()
-        val trackId = if (player.playbackState != Player.STATE_ENDED) {
+        resolveAudioJob?.cancel()
+        val state = player.playbackState
+        val trackId = if (state == Player.STATE_READY || state == Player.STATE_BUFFERING) {
             player.currentMediaItem?.mediaId?.toLongOrNull()
         } else {
             null
@@ -669,6 +703,8 @@ class PlaybackService : MediaSessionService() {
                             .updateTrackPosition(trackId, pos)
                     }
                 }
+            }.onFailure {
+                Log.w(TAG, "Failed to save final position in onDestroy for track $trackId", it)
             }
         }
 
@@ -677,6 +713,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     companion object {
+        private const val TAG = "PlaybackService"
         private val TRUSTED_MEDIA_CONTROLLERS = setOf(
             "com.android.systemui",
             "com.android.bluetooth",

@@ -25,6 +25,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -65,7 +66,7 @@ fun BookDetailBottomBar(
     activePanel: PlayerControlPanel,
     onTogglePanel: (PlayerControlPanel) -> Unit,
     onOpenBookmarkDialog: () -> Unit,
-    onPlayBook: (ChapterTrackEntity?) -> Unit,
+    onPlayBook: (ChapterTrackEntity?, Long?, Boolean) -> Unit,
     onTogglePlayPause: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onSeekBy: (Long) -> Unit,
@@ -86,7 +87,12 @@ fun BookDetailBottomBar(
         (currentTrack?.durationMs ?: 0L).coerceAtLeast(1L)
     }
     var isSeeking by remember { mutableStateOf(false) }
-    var seekSliderValue by remember(trackPosMs) { mutableFloatStateOf(trackPosMs.toFloat()) }
+    var seekSliderValue by remember(currentTrack?.id) { mutableFloatStateOf(trackPosMs.toFloat()) }
+    LaunchedEffect(trackPosMs, isSeeking) {
+        if (!isSeeking) {
+            seekSliderValue = trackPosMs.toFloat()
+        }
+    }
 
     Surface(
         tonalElevation = 6.dp,
@@ -172,11 +178,11 @@ fun BookDetailBottomBar(
                 },
                 onValueChangeFinished = {
                     isSeeking = false
+                    val targetPos = seekSliderValue.toLong()
                     if (isThisBookActive) {
-                        onSeekTo(seekSliderValue.toLong())
+                        onSeekTo(targetPos)
                     } else {
-                        onPlayBook(currentTrack)
-                        onSeekTo(seekSliderValue.toLong())
+                        onPlayBook(currentTrack, targetPos, true)
                     }
                 },
                 valueRange = 0f..trackDurMs.toFloat(),
@@ -204,7 +210,9 @@ fun BookDetailBottomBar(
                 IconButton(
                     onClick = {
                         if (isThisBookActive) onSkipTrack(false)
-                        else tracks.getOrNull((progress.currentTrackIndex - 1).coerceAtLeast(0))?.let { onPlayBook(it) }
+                        else tracks.getOrNull((progress.currentTrackIndex - 1).coerceAtLeast(0))?.let {
+                            onPlayBook(it, null, false)
+                        }
                     },
                     enabled = tracks.size > 1
                 ) {
@@ -214,8 +222,7 @@ fun BookDetailBottomBar(
                     onClick = {
                         if (isThisBookActive) onSeekBy(-10_000L)
                         else {
-                            onPlayBook(currentTrack)
-                            onSeekBy(-10_000L)
+                            onPlayBook(currentTrack, (trackPosMs - 10_000L).coerceAtLeast(0L), true)
                         }
                     }
                 ) {
@@ -223,7 +230,7 @@ fun BookDetailBottomBar(
                 }
                 FilledIconButton(
                     onClick = {
-                        if (isThisBookActive) onTogglePlayPause() else onPlayBook(null)
+                        if (isThisBookActive) onTogglePlayPause() else onPlayBook(null, null, false)
                     },
                     modifier = Modifier.size(56.dp)
                 ) {
@@ -237,8 +244,7 @@ fun BookDetailBottomBar(
                     onClick = {
                         if (isThisBookActive) onSeekBy(30_000L)
                         else {
-                            onPlayBook(currentTrack)
-                            onSeekBy(30_000L)
+                            onPlayBook(currentTrack, (trackPosMs + 30_000L).coerceAtMost(trackDurMs), true)
                         }
                     }
                 ) {
@@ -247,7 +253,9 @@ fun BookDetailBottomBar(
                 IconButton(
                     onClick = {
                         if (isThisBookActive) onSkipTrack(true)
-                        else tracks.getOrNull((progress.currentTrackIndex + 1).coerceAtMost(tracks.lastIndex.coerceAtLeast(0)))?.let { onPlayBook(it) }
+                        else tracks.getOrNull((progress.currentTrackIndex + 1).coerceAtMost(tracks.lastIndex.coerceAtLeast(0)))?.let {
+                            onPlayBook(it, null, false)
+                        }
                     },
                     enabled = tracks.size > 1
                 ) {

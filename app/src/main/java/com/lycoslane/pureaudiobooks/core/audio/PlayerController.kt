@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -63,12 +64,20 @@ class PlayerController(
     private val preferences: AppPreferences
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private data class PendingPlayRequest(
+        val book: AudiobookEntity,
+        val tracks: List<ChapterTrackEntity>,
+        val specificTrack: ChapterTrackEntity?,
+        val startPositionMs: Long?,
+        val forcePlay: Boolean
+    )
+
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
     private var progressJob: Job? = null
     private var sleepTimerJob: Job? = null
     private var syncJob: Job? = null
-    private var pendingPlay: Triple<AudiobookEntity, List<ChapterTrackEntity>, ChapterTrackEntity?>? = null
+    private var pendingPlay: PendingPlayRequest? = null
     private var hasExplicitIdleSeek: Boolean = false
 
     private val _state = MutableStateFlow(PlayerState())
@@ -117,19 +126,30 @@ class PlayerController(
         controllerFuture = future
         future.addListener(
             {
-                val controller = runCatching { future.get() }.getOrNull()
+                val controller = runCatching { future.get() }
+                    .onFailure { Log.e(TAG, "Failed to connect MediaController", it) }
+                    .getOrNull()
                 controllerFuture = null
                 if (controller == null) return@addListener
                 mediaController = controller
                 attachListener(controller)
+                if (_state.value.sleepAtEndOfTrack) {
+                    sendSleepEndOfTrackCommand(true)
+                }
                 if (controller.currentMediaItem != null) {
                     syncFromController(controller)
                 } else {
                     restoreLastAudiobookIfIdle()
                 }
-                pendingPlay?.let { (book, tracks, specific) ->
+                pendingPlay?.let { req ->
                     pendingPlay = null
-                    playAudiobook(book, tracks, specific)
+                    playAudiobook(
+                        book = req.book,
+                        tracks = req.tracks,
+                        specificTrack = req.specificTrack,
+                        startPositionMs = req.startPositionMs,
+                        forcePlay = req.forcePlay
+                    )
                 }
             },
             ContextCompat.getMainExecutor(context)
@@ -161,6 +181,16 @@ class PlayerController(
                         )
                     }
                 }
+                if (controller.currentMediaItem == null &&
+                    playbackState == Player.STATE_IDLE &&
+                    _state.value.currentTrack != null
+                ) {
+                    progressJob?.cancel()
+                    sleepTimerJob?.cancel()
+                    hasExplicitIdleSeek = false
+                    _state.value = PlayerState()
+                    return
+                }
                 syncFromController(controller)
             }
         })
@@ -172,7 +202,10 @@ class PlayerController(
             val lastTrackId = lastTrackPrefs().getLong(KEY_LAST_TRACK_ID, -1L)
             val fromPref = if (lastTrackId > 0L) dao.getTrackWithAudiobook(lastTrackId) else null
             val validPrefBook = fromPref?.takeIf {
-                it.audiobook.deletedAtMs == null && !it.audiobook.isHidden && !it.audiobook.isFinished
+                it.audiobook.deletedAtMs == null &&
+                    !it.audiobook.isHidden &&
+                    !it.audiobook.isFinished &&
+                    !it.track.isFinished
             }
 
             val resolvedPair: Pair<AudiobookEntity, ChapterTrackEntity>? = if (validPrefBook != null) {
@@ -294,7 +327,9 @@ class PlayerController(
     fun playAudiobook(
         book: AudiobookEntity,
         tracks: List<ChapterTrackEntity>,
-        specificTrack: ChapterTrackEntity? = null
+        specificTrack: ChapterTrackEntity? = null,
+        startPositionMs: Long? = null,
+        forcePlay: Boolean = false
     ) {
         if (tracks.isEmpty()) return
         val sortedTracks = sortTracks(tracks)
@@ -305,7 +340,13 @@ class PlayerController(
         val controller = mediaController?.takeIf { it.isConnected }
         if (controller == null) {
             mediaController = null
-            pendingPlay = Triple(book, sortedTracks, targetTrack)
+            pendingPlay = PendingPlayRequest(
+                book = book,
+                tracks = sortedTracks,
+                specificTrack = targetTrack,
+                startPositionMs = startPositionMs,
+                forcePlay = forcePlay
+            )
             connect()
             return
         }
@@ -315,6 +356,26 @@ class PlayerController(
             controller.currentMediaItem?.mediaId == targetTrack.id.toString() &&
             controller.playbackState != Player.STATE_ENDED
         ) {
+            if (startPositionMs != null) {
+                val dur = targetTrack.durationMs.takeIf { it > 0L } ?: _state.value.durationMs
+                val clamped = if (dur > 0L) startPositionMs.coerceIn(0L, dur) else startPositionMs.coerceAtLeast(0L)
+                controller.seekTo(clamped)
+                _state.update {
+                    it.copy(
+                        positionMs = clamped,
+                        currentTrack = it.currentTrack?.copy(positionMs = clamped)
+                    )
+                }
+                scope.launch(Dispatchers.IO) { dao.updateTrackPosition(targetTrack.id, clamped) }
+                if (forcePlay && !controller.playWhenReady) {
+                    controller.play()
+                }
+                return
+            }
+            if (forcePlay) {
+                if (!controller.playWhenReady) controller.play()
+                return
+            }
             togglePlayPause()
             return
         }
@@ -326,7 +387,10 @@ class PlayerController(
             if (f.exists()) Uri.fromFile(f) else return
         }
 
-        if (currentTrackId != null && controller.currentMediaItem != null) {
+        if (currentTrackId != null &&
+            controller.currentMediaItem != null &&
+            (controller.playbackState == Player.STATE_READY || controller.playbackState == Player.STATE_BUFFERING)
+        ) {
             val prevPos = controller.currentPosition.coerceAtLeast(0L)
             scope.launch(Dispatchers.IO) { dao.updateTrackPosition(currentTrackId, prevPos) }
         }
@@ -357,16 +421,21 @@ class PlayerController(
             0L
         }
         val startPos = when {
+            startPositionMs != null -> {
+                val dur = targetTrack.durationMs
+                if (dur > 0L) startPositionMs.coerceIn(0L, dur) else startPositionMs.coerceAtLeast(0L)
+            }
             useExplicitIdlePos -> explicitPosMs.coerceAtLeast(0L)
             targetTrack.positionMs > 0L -> (targetTrack.positionMs - rewindMs).coerceAtLeast(0L)
             else -> 0L
         }
         val idx = sortedTracks.indexOfFirst { it.id == targetTrack.id }.coerceAtLeast(0)
+        val effectiveTrack = if (startPositionMs != null) targetTrack.copy(positionMs = startPos) else targetTrack
 
         _state.update {
             it.copy(
                 currentBook = book,
-                currentTrack = targetTrack,
+                currentTrack = effectiveTrack,
                 bookTracks = sortedTracks,
                 totalBookTracks = sortedTracks.size,
                 currentTrackIndex = idx,
@@ -389,6 +458,9 @@ class PlayerController(
         controller.play()
 
         scope.launch(Dispatchers.IO) {
+            if (startPositionMs != null) {
+                dao.updateTrackPosition(targetTrack.id, startPos)
+            }
             dao.updateLastTrack(book.id, targetTrack.id, System.currentTimeMillis())
         }
     }
@@ -825,10 +897,78 @@ class PlayerController(
             hasExplicitIdleSeek = false
             lastTrackPrefs().edit().remove(KEY_LAST_TRACK_ID).apply()
             mediaController?.let { mc ->
+                sendSleepEndOfTrackCommand(false)
                 mc.stop()
                 mc.clearMediaItems()
             }
             _state.value = PlayerState()
+        }
+    }
+
+    fun reconcileActiveBook(syncTrackPositionFromDb: Boolean = false) {
+        val st = _state.value
+        val bookId = st.currentBook?.id ?: return
+        val curTrackId = st.currentTrack?.id
+        scope.launch(Dispatchers.IO) {
+            val updated = dao.getAudiobook(bookId)
+            val tracks = if (updated != null) sortTracks(dao.getTracksForAudiobook(bookId)) else emptyList()
+            val updatedTrack = if (curTrackId != null) tracks.firstOrNull { it.id == curTrackId } else null
+
+            val invalid = updated == null ||
+                updated.deletedAtMs != null ||
+                updated.isHidden ||
+                updated.isFinished ||
+                tracks.isEmpty() ||
+                (curTrackId != null && (updatedTrack == null || updatedTrack.isFinished))
+
+            if (invalid) {
+                withContext(Dispatchers.Main) {
+                    stopIfPlayingBook(bookId)
+                }
+                return@launch
+            }
+
+            val resolved = resolveAudio(
+                global = preferences.settings.value,
+                book = updated,
+                trackMonoOverride = updatedTrack?.monoModeOverride ?: AudioMonoMode.INHERIT
+            )
+            val idx = if (updatedTrack != null) tracks.indexOfFirst { it.id == updatedTrack.id }.coerceAtLeast(0) else 0
+            val syncedPos = if (syncTrackPositionFromDb && updatedTrack != null) {
+                updatedTrack.positionMs.coerceAtLeast(0L)
+            } else {
+                _state.value.positionMs
+            }
+
+            _state.update {
+                it.copy(
+                    currentBook = updated,
+                    currentTrack = updatedTrack ?: it.currentTrack,
+                    bookTracks = tracks,
+                    totalBookTracks = tracks.size,
+                    currentTrackIndex = idx,
+                    positionMs = syncedPos,
+                    playbackSpeed = resolved.speed,
+                    skipSilence = resolved.skipSilence,
+                    silenceIntensity = resolved.silenceIntensity,
+                    bookMonoOverride = updated.monoModeOverride,
+                    trackMonoOverride = updatedTrack?.monoModeOverride ?: AudioMonoMode.INHERIT,
+                    effectiveMonoMode = resolved.monoMode,
+                    bookNormalizationOverride = updated.audioNormalizationOverride,
+                    effectiveAudioNormalization = resolved.normalization
+                )
+            }
+            withContext(Dispatchers.Main) {
+                mediaController?.takeIf { it.isConnected }?.let { mc ->
+                    pushAudioToController(mc, resolved)
+                    if (syncTrackPositionFromDb &&
+                        updatedTrack != null &&
+                        mc.currentMediaItem?.mediaId == updatedTrack.id.toString()
+                    ) {
+                        mc.seekTo(syncedPos)
+                    }
+                }
+            }
         }
     }
 
@@ -849,6 +989,7 @@ class PlayerController(
     private fun lastTrackPrefs() = context.getSharedPreferences("playback_state", Context.MODE_PRIVATE)
 
     companion object {
+        private const val TAG = "PlayerController"
         private const val KEY_LAST_TRACK_ID = "last_track_id"
     }
 }

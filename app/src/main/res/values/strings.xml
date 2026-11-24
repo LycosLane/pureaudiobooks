@@ -81,6 +81,7 @@
     <string name="search_query_hint">Search title or author</string>
     <string name="save_and_write_sidecar">Save (info.txt &amp; cover.jpg)</string>
     <string name="metadata_saved">Metadata saved</string>
+    <string name="metadata_saved_cover_failed">Metadata saved, but cover download failed</string>
 
     <string name="bookmarks_header">Bookmarks (%1$d)</string>
     <string name="add_bookmark">Bookmark</string>
@@ -174,6 +175,7 @@
     <string name="backup_export">Export backup</string>
     <string name="backup_import">Import backup</string>
     <string name="backup_exported">Backup exported</string>
+    <string name="backup_export_failed">Could not export backup</string>
     <string name="backup_imported">Restored %1$d audiobooks</string>
     <string name="backup_import_failed">Could not import backup</string>
     <string name="settings_version_format">PureAudiobooks v%1$s (Build %2$d)</string>
@@ -225,6 +227,7 @@
     <string name="search_online_alternatives">Search online for alternatives</string>
     <string name="choose_cover_from_gallery">Choose cover from gallery</string>
     <string name="cover_updated">Cover updated</string>
+    <string name="cover_update_failed">Could not update cover (max 8 MB)</string>
     <string name="tap_active_tab_to_collapse">Tap active tab again to collapse</string>
     <string name="no_description_available">No description available.</string>
     <string name="tap_to_read_fullscreen_hint">Tap text for fullscreen reader · Pinch to zoom</string>

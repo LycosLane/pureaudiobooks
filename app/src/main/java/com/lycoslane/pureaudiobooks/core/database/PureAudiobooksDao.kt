@@ -74,6 +74,9 @@ interface PureAudiobooksDao {
     @Query("SELECT * FROM chapter_tracks WHERE id = :trackId")
     suspend fun getTrackWithAudiobook(trackId: Long): TrackWithAudiobook?
 
+    @Query("SELECT * FROM bookmarks WHERE audiobookId = :audiobookId ORDER BY createdAtMs DESC")
+    suspend fun getBookmarksForAudiobookOnce(audiobookId: Long): List<BookmarkEntity>
+
     @Query("SELECT * FROM bookmarks ORDER BY createdAtMs DESC")
     suspend fun getAllBookmarksOnce(): List<BookmarkEntity>
 
@@ -82,6 +85,48 @@ interface PureAudiobooksDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertTracks(tracks: List<ChapterTrackEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertTracksReturningIds(tracks: List<ChapterTrackEntity>): List<Long>
+
+    @Transaction
+    suspend fun splitAudiobookTransaction(
+        sourceAudiobookId: Long,
+        newBooksWithTracks: List<Pair<AudiobookEntity, List<ChapterTrackEntity>>>
+    ): Int {
+        val oldBookmarks = getBookmarksForAudiobookOnce(sourceAudiobookId)
+        val trackMapping = HashMap<Long, Pair<Long, Long>>()
+        var created = 0
+
+        for ((bookEntity, clonedTracks) in newBooksWithTracks) {
+            val existing = getAudiobookByFolderKey(bookEntity.folderKey)
+            val targetBookId = existing?.id ?: insertAudiobook(bookEntity)
+            if (targetBookId > 0L) {
+                val preparedTracks = clonedTracks.map { it.copy(id = 0L, audiobookId = targetBookId) }
+                val insertedIds = insertTracksReturningIds(preparedTracks)
+                clonedTracks.forEachIndexed { idx, oldTrack ->
+                    val newId = insertedIds.getOrNull(idx) ?: -1L
+                    if (newId > 0L) {
+                        trackMapping[oldTrack.id] = targetBookId to newId
+                    }
+                }
+                created++
+            }
+        }
+
+        for (bm in oldBookmarks) {
+            val mapped = trackMapping[bm.trackId] ?: continue
+            insertBookmark(
+                bm.copy(
+                    id = 0L,
+                    audiobookId = mapped.first,
+                    trackId = mapped.second
+                )
+            )
+        }
+        deleteAudiobook(sourceAudiobookId)
+        return created
+    }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBookmark(bookmark: BookmarkEntity): Long
@@ -124,17 +169,8 @@ interface PureAudiobooksDao {
         lastScannedMs: Long
     )
 
-    @Query("UPDATE audiobooks SET lastScannedMs = :lastScannedMs WHERE id = :audiobookId")
-    suspend fun touchScanned(audiobookId: Long, lastScannedMs: Long)
-
-    @Query("UPDATE audiobooks SET playbackSpeed = :speed WHERE id = :audiobookId")
-    suspend fun updatePlaybackSpeed(audiobookId: Long, speed: Float)
-
     @Query("UPDATE audiobooks SET speedOverride = :speedOverride, playbackSpeed = :playbackSpeed WHERE id = :audiobookId")
     suspend fun setBookSpeedOverride(audiobookId: Long, speedOverride: Float, playbackSpeed: Float)
-
-    @Query("UPDATE audiobooks SET skipSilence = :enabled, silenceIntensity = :intensity WHERE id = :audiobookId")
-    suspend fun updateSkipSilence(audiobookId: Long, enabled: Boolean, intensity: Int)
 
     @Query("UPDATE audiobooks SET silenceModeOverride = :silenceModeOverride, skipSilence = :skipSilence, silenceIntensity = :silenceIntensity WHERE id = :audiobookId")
     suspend fun setBookSilenceModeOverride(audiobookId: Long, silenceModeOverride: Int, skipSilence: Boolean, silenceIntensity: Int)

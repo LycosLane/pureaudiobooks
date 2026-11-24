@@ -1,5 +1,6 @@
 package com.lycoslane.pureaudiobooks.ui.detail
 
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -49,6 +50,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.invisibleToUser
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -87,7 +90,7 @@ fun BookDetailScreen(
     isSearchingOnline: Boolean,
     playerState: PlayerState,
     onBack: () -> Unit,
-    onPlayBook: (ChapterTrackEntity?) -> Unit,
+    onPlayBook: (ChapterTrackEntity?, Long?, Boolean) -> Unit,
     onTogglePlayPause: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onSeekBy: (Long) -> Unit,
@@ -117,6 +120,7 @@ fun BookDetailScreen(
     onJumpToBookmark: (ChapterTrackEntity, Long) -> Unit,
     onEnableOnlineLookup: (String) -> Unit,
     onSearchOnline: (String) -> Unit,
+    onClearOnlineResults: () -> Unit,
     onPickGalleryCoverBytes: (ByteArray) -> Unit,
     onResolveMetadata: (String, String, String, String?) -> Unit,
     onSplitByAlbum: () -> Unit
@@ -139,7 +143,7 @@ fun BookDetailScreen(
     var showDescriptionReader by rememberSaveable { mutableStateOf(false) }
     var showBookSettingsSheet by rememberSaveable { mutableStateOf(false) }
     var activePanel by rememberSaveable { mutableStateOf(PlayerControlPanel.NONE) }
-    var showBookmarkDialog by rememberSaveable { mutableStateOf(false) }
+    var bookmarkTarget by remember { mutableStateOf<Pair<ChapterTrackEntity, Long>?>(null) }
     var bookmarkNote by remember { mutableStateOf("") }
     var chapterOptionsTarget by remember { mutableStateOf<Pair<Int, ChapterTrackEntity>?>(null) }
 
@@ -160,11 +164,11 @@ fun BookDetailScreen(
                     context.contentResolver.openInputStream(uri)?.use { input ->
                         BoundedInputStream(input, 8L * 1024 * 1024).use { it.readBytes() }
                     }
+                }.onFailure {
+                    Log.w("BookDetailScreen", "Failed to read picked cover image $uri", it)
                 }.getOrNull()
-                if (bytes != null && bytes.isNotEmpty()) {
-                    withContext(Dispatchers.Main) {
-                        onPickGalleryCoverBytes(bytes)
-                    }
+                withContext(Dispatchers.Main) {
+                    onPickGalleryCoverBytes(bytes ?: ByteArray(0))
                 }
             }
         }
@@ -209,8 +213,30 @@ fun BookDetailScreen(
         AudioMonoMode.OFF
     }
 
+    val openBookmarkDialogForCurrentPosition = {
+        if (book != null) {
+            val targetTrack = tracks.firstOrNull { it.id == activeTrackId }
+                ?: tracks.firstOrNull { it.id == book.lastTrackId }
+                ?: tracks.firstOrNull()
+            if (targetTrack != null) {
+                val targetPos = if (tracks.any { it.id == activeTrackId }) {
+                    playerState.positionMs
+                } else {
+                    targetTrack.positionMs
+                }
+                bookmarkNote = ""
+                bookmarkTarget = targetTrack to targetPos.coerceAtLeast(0L)
+            }
+        }
+    }
+    val hasFullscreenOverlay = (showCoverLightbox && book != null) ||
+        (showDescriptionReader && book != null && book.description.isNotBlank())
+
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
+        modifier = Modifier.semantics {
+            if (hasFullscreenOverlay) invisibleToUser()
+        },
         topBar = {
             TopAppBar(
                 title = {
@@ -260,7 +286,7 @@ fun BookDetailScreen(
                     onTogglePanel = { target ->
                         activePanel = if (activePanel == target) PlayerControlPanel.NONE else target
                     },
-                    onOpenBookmarkDialog = { showBookmarkDialog = true },
+                    onOpenBookmarkDialog = openBookmarkDialogForCurrentPosition,
                     onPlayBook = onPlayBook,
                     onTogglePlayPause = onTogglePlayPause,
                     onSeekTo = onSeekTo,
@@ -356,7 +382,7 @@ fun BookDetailScreen(
                                 isCurrent = isCurrent,
                                 currentPosMs = if (track.id == activeTrackId) activePositionMs else track.positionMs,
                                 onOpenOptions = { chapterOptionsTarget = idx to track },
-                                onQuickPlay = { onPlayBook(track) }
+                                onQuickPlay = { onPlayBook(track, null, false) }
                             )
                         }
                     }
@@ -378,7 +404,7 @@ fun BookDetailScreen(
                         if (currentTrack != null) {
                             item(key = "add_bm_btn") {
                                 OutlinedButton(
-                                    onClick = { showBookmarkDialog = true },
+                                    onClick = openBookmarkDialogForCurrentPosition,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Icon(Icons.Default.BookmarkAdd, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -505,13 +531,12 @@ fun BookDetailScreen(
     }
     }
 
-    if (showBookmarkDialog && book != null) {
-        val targetTrack = tracks.firstOrNull { it.id == activeTrackId }
-            ?: tracks.firstOrNull { it.id == book.lastTrackId }
-            ?: tracks.firstOrNull()
-        val targetPos = if (tracks.any { it.id == activeTrackId }) playerState.positionMs else (targetTrack?.positionMs ?: 0L)
+    bookmarkTarget?.let { (targetTrack, targetPos) ->
         AlertDialog(
-            onDismissRequest = { showBookmarkDialog = false },
+            onDismissRequest = {
+                bookmarkNote = ""
+                bookmarkTarget = null
+            },
             title = { Text(stringResource(R.string.add_bookmark)) },
             text = {
                 OutlinedTextField(
@@ -524,17 +549,18 @@ fun BookDetailScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (targetTrack != null) {
-                        onAddBookmark(targetTrack, targetPos, bookmarkNote)
-                    }
+                    onAddBookmark(targetTrack, targetPos, bookmarkNote)
                     bookmarkNote = ""
-                    showBookmarkDialog = false
+                    bookmarkTarget = null
                 }) {
                     Text(stringResource(R.string.save))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showBookmarkDialog = false }) {
+                TextButton(onClick = {
+                    bookmarkNote = ""
+                    bookmarkTarget = null
+                }) {
                     Text(stringResource(R.string.cancel))
                 }
             }
@@ -548,7 +574,7 @@ fun BookDetailScreen(
                 chapterIndex = idx,
                 totalChapters = tracks.size,
                 folderUri = book.folderUri,
-                onPlay = { onPlayBook(targetTrack) },
+                onPlay = { onPlayBook(targetTrack, null, false) },
                 onToggleSingleFinished = { onToggleTrackFinished(targetTrack.id, !targetTrack.isFinished) },
                 onMarkUpToHereFinished = { onMarkTracksUpToFinished(targetTrack.id) },
                 onMarkFromHereUnfinished = { onMarkTracksFromUnfinished(targetTrack.id) },
@@ -603,13 +629,18 @@ fun BookDetailScreen(
             onSearchOnline = onSearchOnline,
             onSplitByAlbum = {
                 showMetadataSheet = false
+                onClearOnlineResults()
                 onSplitByAlbum()
             },
             onSave = { title, author, desc, coverUrl ->
                 showMetadataSheet = false
+                onClearOnlineResults()
                 onResolveMetadata(title, author, desc, coverUrl)
             },
-            onDismiss = { showMetadataSheet = false }
+            onDismiss = {
+                showMetadataSheet = false
+                onClearOnlineResults()
+            }
         )
     }
 }

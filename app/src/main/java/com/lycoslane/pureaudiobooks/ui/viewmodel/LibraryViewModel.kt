@@ -1,6 +1,7 @@
 package com.lycoslane.pureaudiobooks.ui.viewmodel
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lycoslane.pureaudiobooks.PureAudiobooksApplication
@@ -8,6 +9,8 @@ import com.lycoslane.pureaudiobooks.core.database.AudiobookEntity
 import com.lycoslane.pureaudiobooks.core.database.AudiobookWithTracks
 import com.lycoslane.pureaudiobooks.core.preferences.AppSettings
 import com.lycoslane.pureaudiobooks.ui.common.Formatters
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -30,9 +33,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
-
-    private val _statusMessage = MutableStateFlow<String?>(null)
-    val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
+    private var scanJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -40,12 +41,18 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun scanFolder() {
-        if (_isScanning.value) return
-        viewModelScope.launch {
+    fun scanFolder(forceRestart: Boolean = false) {
+        if (!forceRestart && _isScanning.value) return
+        scanJob?.cancel()
+        scanJob = viewModelScope.launch {
             _isScanning.value = true
             try {
                 repo.syncLocalLibrary()
+                app.playerController.reconcileActiveBook()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Library scan failed", e)
             } finally {
                 _isScanning.value = false
             }
@@ -54,7 +61,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     fun setLocalFolderUriAndScan(uri: String) {
         preferences.setLocalFolderUri(uri)
-        scanFolder()
+        scanFolder(forceRestart = true)
     }
 
     fun playOrToggleBook(item: AudiobookWithTracks) {
@@ -91,16 +98,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun setBookPlaybackSpeed(bookId: Long, speed: Float) {
-        app.playerController.setBookPlaybackSpeed(bookId, speed)
-    }
-
     fun setBookSpeedOverride(bookId: Long, speedOverride: Float) {
         app.playerController.setBookSpeedOverride(bookId, speedOverride)
-    }
-
-    fun setBookSilenceMode(bookId: Long, enabled: Boolean, intensity: Int) {
-        app.playerController.setBookSilenceMode(bookId, enabled, intensity)
     }
 
     fun setBookSilenceOverride(bookId: Long, silenceModeOverride: Int) {
@@ -147,12 +146,21 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     fun importBackup(json: String, onComplete: (Int) -> Unit) {
         viewModelScope.launch {
-            val count = runCatching { repo.importBackupJson(json) }.getOrDefault(-1)
+            val count = try {
+                val restored = repo.importBackupJson(json)
+                app.playerController.reconcileActiveBook(syncTrackPositionFromDb = true)
+                restored
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Backup import failed", e)
+                -1
+            }
             onComplete(count)
         }
     }
 
-    fun clearStatusMessage() {
-        _statusMessage.value = null
+    companion object {
+        private const val TAG = "LibraryViewModel"
     }
 }

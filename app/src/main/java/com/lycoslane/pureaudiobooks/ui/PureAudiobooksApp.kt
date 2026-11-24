@@ -2,6 +2,7 @@ package com.lycoslane.pureaudiobooks.ui
 
 import android.app.Activity
 import android.content.Intent
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
@@ -32,13 +33,16 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.lycoslane.pureaudiobooks.PureAudiobooksApplication
 import com.lycoslane.pureaudiobooks.R
+import com.lycoslane.pureaudiobooks.core.network.BoundedInputStream
 import com.lycoslane.pureaudiobooks.ui.detail.BookDetailScreen
 import com.lycoslane.pureaudiobooks.ui.home.HomeScreen
 import com.lycoslane.pureaudiobooks.ui.player.MiniPlayer
 import com.lycoslane.pureaudiobooks.ui.settings.SettingsScreen
 import com.lycoslane.pureaudiobooks.ui.viewmodel.BookDetailViewModel
 import com.lycoslane.pureaudiobooks.ui.viewmodel.LibraryViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun PureAudiobooksApp(app: PureAudiobooksApplication) {
@@ -83,13 +87,20 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
     ) { uri ->
         if (uri != null) {
             libraryViewModel.exportBackup { json ->
-                runCatching {
-                    context.contentResolver.openOutputStream(uri)?.use {
-                        it.write(json.toByteArray(Charsets.UTF_8))
+                scope.launch {
+                    val ok = withContext(Dispatchers.IO) {
+                        runCatching {
+                            context.contentResolver.openOutputStream(uri)?.use {
+                                it.write(json.toByteArray(Charsets.UTF_8))
+                                true
+                            } ?: false
+                        }.onFailure {
+                            Log.e("PureAudiobooksApp", "Backup export failed", it)
+                        }.getOrDefault(false)
                     }
-                    scope.launch {
-                        snackbarHostState.showSnackbar(context.getString(R.string.backup_exported))
-                    }
+                    snackbarHostState.showSnackbar(
+                        context.getString(if (ok) R.string.backup_exported else R.string.backup_export_failed)
+                    )
                 }
             }
         }
@@ -99,18 +110,32 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) {
-            val json = runCatching {
-                context.contentResolver.openInputStream(uri)?.use {
-                    it.readBytes().toString(Charsets.UTF_8)
+            scope.launch {
+                val json = withContext(Dispatchers.IO) {
+                    runCatching {
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            BoundedInputStream(input, 10L * 1024 * 1024).use {
+                                it.readBytes().toString(Charsets.UTF_8)
+                            }
+                        }
+                    }.onFailure {
+                        Log.e("PureAudiobooksApp", "Backup file read failed", it)
+                    }.getOrNull()
                 }
-            }.getOrNull()
-            if (!json.isNullOrBlank()) {
+                if (json.isNullOrBlank()) {
+                    snackbarHostState.showSnackbar(context.getString(R.string.backup_import_failed))
+                    return@launch
+                }
+                val previousLanguage = libraryViewModel.preferences.settings.value.appLanguage
                 libraryViewModel.importBackup(json) { count ->
                     scope.launch {
                         snackbarHostState.showSnackbar(
                             if (count >= 0) context.getString(R.string.backup_imported, count)
                             else context.getString(R.string.backup_import_failed)
                         )
+                        if (count >= 0 && libraryViewModel.preferences.settings.value.appLanguage != previousLanguage) {
+                            (context as? Activity)?.recreate()
+                        }
                     }
                 }
             }
@@ -292,7 +317,13 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     isSearchingOnline = isSearchingOnline,
                     playerState = playerState,
                     onBack = { navController.popBackStack() },
-                    onPlayBook = { track -> detailViewModel.playBook(track) },
+                    onPlayBook = { track, startPosMs, forcePlay ->
+                        detailViewModel.playBook(
+                            specificTrack = track,
+                            startPositionMs = startPosMs,
+                            forcePlay = forcePlay
+                        )
+                    },
                     onTogglePlayPause = { app.playerController.togglePlayPause() },
                     onSeekTo = { app.playerController.seekTo(it) },
                     onSeekBy = { app.playerController.seekBy(it) },
@@ -316,9 +347,10 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     onSleepMinutes = { app.playerController.startSleepTimerMinutes(it) },
                     onSleepEndOfTrack = { app.playerController.setSleepAtEndOfTrack(it) },
                     onAddBookmark = { track, posMs, note ->
-                        scope.launch {
-                            app.repository.addBookmark(bookId, track, posMs, note)
-                            snackbarHostState.showSnackbar(context.getString(R.string.bookmark_saved))
+                        detailViewModel.addBookmark(track, posMs, note) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(context.getString(R.string.bookmark_saved))
+                            }
                         }
                     },
                     onToggleTrackFinished = { tid, finished -> detailViewModel.setTrackFinished(tid, finished) },
@@ -354,24 +386,40 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     },
                     onDeleteBookmark = { bmId -> detailViewModel.deleteBookmark(bmId) },
                     onJumpToBookmark = { track, posMs ->
-                        detailViewModel.playBook(track)
-                        app.playerController.seekTo(posMs)
+                        detailViewModel.playBook(
+                            specificTrack = track,
+                            startPositionMs = posMs,
+                            forcePlay = true
+                        )
                     },
                     onEnableOnlineLookup = { query -> detailViewModel.enableOnlineLookupAndSearch(query) },
                     onSearchOnline = { query -> detailViewModel.searchOnline(query) },
+                    onClearOnlineResults = { detailViewModel.clearOnlineResults() },
                     onPickGalleryCoverBytes = { bytes ->
-                        detailViewModel.updateBookCover(bytes) { updated ->
-                            if (updated) {
+                        if (bytes.isEmpty()) {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(context.getString(R.string.cover_update_failed))
+                            }
+                        } else {
+                            detailViewModel.updateBookCover(bytes) { updated ->
                                 scope.launch {
-                                    snackbarHostState.showSnackbar(context.getString(R.string.cover_updated))
+                                    snackbarHostState.showSnackbar(
+                                        context.getString(
+                                            if (updated) R.string.cover_updated else R.string.cover_update_failed
+                                        )
+                                    )
                                 }
                             }
                         }
                     },
                     onResolveMetadata = { title, author, desc, cover ->
-                        detailViewModel.resolveMetadata(title, author, desc, cover) {
+                        detailViewModel.resolveMetadata(title, author, desc, cover) { coverFailed ->
                             scope.launch {
-                                snackbarHostState.showSnackbar(context.getString(R.string.metadata_saved))
+                                snackbarHostState.showSnackbar(
+                                    context.getString(
+                                        if (coverFailed) R.string.metadata_saved_cover_failed else R.string.metadata_saved
+                                    )
+                                )
                             }
                         }
                     },

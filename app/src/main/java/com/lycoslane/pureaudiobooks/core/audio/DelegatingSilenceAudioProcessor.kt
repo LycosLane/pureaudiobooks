@@ -20,6 +20,7 @@ class DelegatingSilenceAudioProcessor : AudioProcessor {
         private set
 
     private var currentTier: Int = -1
+    private var silenceSupported: Boolean = false
     private var inputFormat: AudioProcessor.AudioFormat = AudioProcessor.AudioFormat.NOT_SET
     private var passthroughBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
     private var reusableBuffer: ByteBuffer = AudioProcessor.EMPTY_BUFFER
@@ -32,20 +33,35 @@ class DelegatingSilenceAudioProcessor : AudioProcessor {
     override fun configure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
         inputFormat = inputAudioFormat
         if (inputAudioFormat == AudioProcessor.AudioFormat.NOT_SET) {
+            silenceSupported = false
             return AudioProcessor.AudioFormat.NOT_SET
         }
+        var allSupported = true
         for (tier in tiers) {
             tier.setEnabled(true)
-            tier.configure(inputAudioFormat)
+            val configured = try {
+                tier.configure(inputAudioFormat)
+            } catch (_: AudioProcessor.UnhandledAudioFormatException) {
+                AudioProcessor.AudioFormat.NOT_SET
+            }
+            if (configured == AudioProcessor.AudioFormat.NOT_SET) {
+                allSupported = false
+            } else {
+                tier.flush()
+                if (!tier.isActive) {
+                    allSupported = false
+                }
+            }
         }
-        currentTier = activeTier
+        silenceSupported = allSupported
+        currentTier = if (silenceSupported) activeTier else -1
         return inputAudioFormat
     }
 
     override fun isActive(): Boolean = inputFormat != AudioProcessor.AudioFormat.NOT_SET
 
     override fun queueInput(inputBuffer: ByteBuffer) {
-        val targetTier = activeTier
+        val targetTier = if (silenceSupported) activeTier else -1
         if (targetTier != currentTier) {
             if (currentTier in 0..2) tiers[currentTier].flush()
             if (targetTier in 0..2) tiers[targetTier].flush()
@@ -95,12 +111,13 @@ class DelegatingSilenceAudioProcessor : AudioProcessor {
     override fun flush() {
         inputEnded = false
         passthroughBuffer = AudioProcessor.EMPTY_BUFFER
-        currentTier = activeTier
+        currentTier = if (silenceSupported) activeTier else -1
         for (tier in tiers) tier.flush()
     }
 
     override fun reset() {
         flush()
+        silenceSupported = false
         inputFormat = AudioProcessor.AudioFormat.NOT_SET
         reusableBuffer = AudioProcessor.EMPTY_BUFFER
         for (tier in tiers) tier.reset()

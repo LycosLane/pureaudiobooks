@@ -1,6 +1,7 @@
 package com.lycoslane.pureaudiobooks.domain.repository
 
 import android.content.Context
+import android.util.Log
 import com.lycoslane.pureaudiobooks.core.audio.AudioMonoMode
 import com.lycoslane.pureaudiobooks.core.audio.AudioOverride
 import com.lycoslane.pureaudiobooks.core.audio.SilenceOverride
@@ -84,14 +85,15 @@ class AudiobookRepository(
         description: String,
         onlineCoverUrl: String? = null,
         writeSidecarFiles: Boolean = true
-    ): Unit = withContext(Dispatchers.IO) {
-        val book = dao.getAudiobook(audiobookId) ?: return@withContext
+    ): Boolean = withContext(Dispatchers.IO) {
+        val book = dao.getAudiobook(audiobookId) ?: return@withContext false
         val cleanTitle = title.trim().ifBlank { book.folderName }
         val cleanAuthor = author.trim()
         val cleanDesc = description.trim()
 
         var nextArtworkUrl = book.artworkUrl
         var coverBytes: ByteArray? = null
+        var coverDownloadFailed = false
         if (!onlineCoverUrl.isNullOrBlank()) {
             coverBytes = OnlineMetadataClient.downloadCoverBytes(onlineCoverUrl)
             if (coverBytes != null && coverBytes.isNotEmpty()) {
@@ -100,6 +102,9 @@ class AudiobookRepository(
                 val localFile = File(coversDir, "$hash.jpg")
                 localFile.writeBytes(coverBytes)
                 nextArtworkUrl = localFile.absolutePath
+            } else {
+                coverDownloadFailed = true
+                Log.w(TAG, "Failed to download online cover from $onlineCoverUrl")
             }
         }
 
@@ -131,6 +136,7 @@ class AudiobookRepository(
             metadataLockedByUser = true,
             lastScannedMs = System.currentTimeMillis()
         )
+        !coverDownloadFailed
     }
 
     suspend fun updateBookCoverFromBytes(
@@ -212,46 +218,36 @@ class AudiobookRepository(
         if (groups.size <= 1) return@withContext 0
 
         val now = System.currentTimeMillis()
-        var created = 0
-        for ((albumName, groupTracks) in groups) {
+        val newBooksWithTracks = groups.map { (albumName, groupTracks) ->
             val folderKey = "local://${book.folderDocId}::$albumName"
-            val existing = dao.getAudiobookByFolderKey(folderKey)
-            val targetId = existing?.id ?: dao.insertAudiobook(
-                AudiobookEntity(
-                    folderKey = folderKey,
-                    folderDocId = book.folderDocId,
-                    folderUri = book.folderUri,
-                    folderName = book.folderName,
-                    parentFolderName = book.parentFolderName,
-                    title = albumName,
-                    author = groupTracks.firstOrNull { it.artistTag.isNotBlank() }?.artistTag ?: book.author,
-                    description = book.description,
-                    artworkUrl = book.artworkUrl,
-                    playbackSpeed = book.playbackSpeed,
-                    speedOverride = book.speedOverride,
-                    skipSilence = book.skipSilence,
-                    silenceIntensity = book.silenceIntensity,
-                    silenceModeOverride = book.silenceModeOverride,
-                    monoModeOverride = book.monoModeOverride,
-                    audioNormalizationOverride = book.audioNormalizationOverride,
-                    smartRewindOverride = book.smartRewindOverride,
-                    hasTagConflict = false,
-                    conflictSummaryJson = "",
-                    metadataLockedByUser = true,
-                    isSplitByAlbum = true,
-                    lastScannedMs = now
-                )
+            val entity = AudiobookEntity(
+                folderKey = folderKey,
+                folderDocId = book.folderDocId,
+                folderUri = book.folderUri,
+                folderName = book.folderName,
+                parentFolderName = book.parentFolderName,
+                title = albumName,
+                author = groupTracks.firstOrNull { it.artistTag.isNotBlank() }?.artistTag ?: book.author,
+                description = book.description,
+                artworkUrl = book.artworkUrl,
+                playbackSpeed = book.playbackSpeed,
+                speedOverride = book.speedOverride,
+                skipSilence = book.skipSilence,
+                silenceIntensity = book.silenceIntensity,
+                silenceModeOverride = book.silenceModeOverride,
+                monoModeOverride = book.monoModeOverride,
+                audioNormalizationOverride = book.audioNormalizationOverride,
+                smartRewindOverride = book.smartRewindOverride,
+                hasTagConflict = false,
+                conflictSummaryJson = "",
+                metadataLockedByUser = true,
+                isSplitByAlbum = true,
+                lastScannedMs = now
             )
-            if (targetId > 0L) {
-                val cloned = groupTracks.mapIndexed { idx, t ->
-                    t.copy(id = 0L, audiobookId = targetId, sortOrder = idx)
-                }
-                dao.insertTracks(cloned)
-                created++
-            }
+            val reindexed = groupTracks.mapIndexed { idx, t -> t.copy(sortOrder = idx) }
+            entity to reindexed
         }
-        dao.deleteAudiobook(audiobookId)
-        created
+        dao.splitAudiobookTransaction(audiobookId, newBooksWithTracks)
     }
 
     suspend fun moveToTrash(audiobookId: Long) = withContext(Dispatchers.IO) {
@@ -274,6 +270,25 @@ class AudiobookRepository(
             tracks.forEach { LocalAudiobookScanner.deleteLocalDocument(context, it.fileUri) }
         }
         dao.deleteAudiobook(audiobookId)
+        cleanupLocalCoverFiles(book)
+    }
+
+    private suspend fun cleanupLocalCoverFiles(book: AudiobookEntity) {
+        val coversDir = File(context.filesDir, "local_covers")
+        val remainingBooks = dao.getAllAudiobooksOnce()
+        val candidates = listOfNotNull(
+            File(coversDir, "${sha256(book.folderKey)}.jpg"),
+            book.artworkUrl.takeIf { it.startsWith(coversDir.absolutePath) }?.let { File(it) }
+        ).distinctBy { it.absolutePath }
+
+        for (file in candidates) {
+            val stillReferenced = remainingBooks.any { it.artworkUrl == file.absolutePath }
+            if (!stillReferenced && file.exists()) {
+                runCatching { file.delete() }
+                    .onFailure { Log.w(TAG, "Failed to delete orphaned cover ${file.absolutePath}", it) }
+            }
+        }
+        BookCoverCache.invalidate(book.artworkUrl)
     }
 
     suspend fun setTrackFinished(trackId: Long, finished: Boolean) = withContext(Dispatchers.IO) {
@@ -397,28 +412,6 @@ class AudiobookRepository(
         dao.deleteBookmark(bookmarkId)
     }
 
-    suspend fun updateBookSpeed(audiobookId: Long, speed: Float) = withContext(Dispatchers.IO) {
-        dao.updatePlaybackSpeed(audiobookId, speed.coerceIn(0.50f, 3.00f))
-    }
-
-    suspend fun updateBookSilence(audiobookId: Long, enabled: Boolean, intensity: Int) =
-        withContext(Dispatchers.IO) {
-            dao.updateSkipSilence(audiobookId, enabled, intensity.coerceIn(0, 2))
-        }
-
-    suspend fun updateBookMonoOverride(audiobookId: Long, mode: Int) = withContext(Dispatchers.IO) {
-        dao.setBookMonoModeOverride(audiobookId, AudioMonoMode.normalizeOverride(mode))
-    }
-
-    suspend fun updateTrackMonoOverride(trackId: Long, mode: Int) = withContext(Dispatchers.IO) {
-        dao.setTrackMonoModeOverride(trackId, AudioMonoMode.normalizeOverride(mode))
-    }
-
-    suspend fun updateBookNormalizationOverride(audiobookId: Long, override: Int) =
-        withContext(Dispatchers.IO) {
-            dao.setBookAudioNormalizationOverride(audiobookId, AudioOverride.normalize(override))
-        }
-
     suspend fun exportBackupJson(): String = backupManager.exportBackupJson()
 
     suspend fun importBackupJson(rawJson: String): Int = backupManager.importBackupJson(rawJson)
@@ -429,6 +422,7 @@ class AudiobookRepository(
     }
 
     companion object {
+        private const val TAG = "AudiobookRepository"
         private const val MAX_COVER_BYTES = 8 * 1024 * 1024
     }
 }

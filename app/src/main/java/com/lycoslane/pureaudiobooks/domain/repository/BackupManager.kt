@@ -226,8 +226,8 @@ internal class BackupManager(
             val lastPlayedAt = obj.optLong("lastPlayedAtMs", existing.lastPlayedAtMs).coerceAtLeast(0L)
             if (matchedLastTrack != null) {
                 dao.updateLastTrack(existing.id, matchedLastTrack.id, lastPlayedAt)
-            } else if (lastPlayedAt > 0L) {
-                dao.updateLastPlayed(existing.id, lastPlayedAt)
+            } else if (obj.has("lastPlayedAtMs")) {
+                dao.updateLastTrack(existing.id, 0L, lastPlayedAt)
             }
 
             restored++

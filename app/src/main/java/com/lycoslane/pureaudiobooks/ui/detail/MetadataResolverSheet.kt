@@ -377,7 +377,7 @@ fun MetadataResolverSheet(
 
                 MetadataTextDiffCard(
                     title = stringResource(R.string.field_title),
-                    beforeText = book.title,
+                    beforeText = manualTitle,
                     emptyBeforeText = book.folderName,
                     candidateText = titMatch.title,
                     manualDraft = diffDraftTitle,
@@ -403,7 +403,7 @@ fun MetadataResolverSheet(
 
                 MetadataTextDiffCard(
                     title = stringResource(R.string.field_author),
-                    beforeText = book.author,
+                    beforeText = manualAuthor,
                     emptyBeforeText = stringResource(R.string.metadata_empty_value),
                     candidateText = authMatch.author,
                     manualDraft = diffDraftAuthor,
@@ -429,7 +429,7 @@ fun MetadataResolverSheet(
 
                 MetadataTextDiffCard(
                     title = stringResource(R.string.field_description),
-                    beforeText = book.description,
+                    beforeText = manualDescription,
                     emptyBeforeText = stringResource(R.string.metadata_empty_value),
                     candidateText = descMatch.description,
                     manualDraft = diffDraftDesc,
@@ -463,19 +463,19 @@ fun MetadataResolverSheet(
                 Button(
                     onClick = {
                         val finalTitle = if (useNewTitle) {
-                            (diffDraftTitle ?: titMatch.title).ifBlank { book.title }
+                            (diffDraftTitle ?: titMatch.title).ifBlank { manualTitle }
                         } else {
-                            book.title
+                            manualTitle
                         }
                         val finalAuthor = if (useNewAuthor) {
                             diffDraftAuthor ?: authMatch.author
                         } else {
-                            book.author
+                            manualAuthor
                         }
                         val finalDesc = if (useNewDesc) {
                             diffDraftDesc ?: descMatch.description
                         } else {
-                            book.description
+                            manualDescription
                         }
                         val finalCover = if (useNewCover) covMatch.coverUrl.takeIf { it.isNotBlank() } else null
                         onSave(finalTitle, finalAuthor, finalDesc, finalCover)

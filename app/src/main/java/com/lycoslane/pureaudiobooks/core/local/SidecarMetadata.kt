@@ -3,6 +3,7 @@ package com.lycoslane.pureaudiobooks.core.local
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
+import android.util.Log
 import java.io.IOException
 
 data class SidecarInfo(
@@ -16,6 +17,7 @@ data class SidecarInfo(
 
 object SidecarMetadata {
 
+    private const val TAG = "SidecarMetadata"
     const val INFO_FILENAME = "info.txt"
     const val COVER_FILENAME = "cover.jpg"
     private const val MAX_INFO_BYTES = 256 * 1024 // 256 KB
@@ -77,6 +79,8 @@ object SidecarMetadata {
                 if (total > MAX_INFO_BYTES) throw IOException("info.txt too large")
                 parseInfoText(buffer.copyOf(total).toString(Charsets.UTF_8))
             }
+        }.onFailure {
+            Log.w(TAG, "Failed to read info.txt from $docUri", it)
         }.getOrNull()
     }
 
@@ -111,6 +115,8 @@ object SidecarMetadata {
                     out.write(formatInfoText(info).toByteArray(Charsets.UTF_8))
                 }
             }
+        }.onFailure {
+            Log.w(TAG, "Failed to write info.txt to $folderDocId", it)
         }
 
         // Write cover.jpg if provided
@@ -157,6 +163,8 @@ object SidecarMetadata {
             }
         }
         targetUri?.toString()
+    }.onFailure {
+        Log.w(TAG, "Failed to write cover.jpg to $parentDocUri", it)
     }.getOrNull()?.takeIf { it.isNotBlank() }
 
     private fun querySimpleChildren(
@@ -182,6 +190,8 @@ object SidecarMetadata {
                     }
                 }
             }
+        }.onFailure {
+            Log.w(TAG, "Failed to query folder children for $parentDocId", it)
         }
         return map
     }

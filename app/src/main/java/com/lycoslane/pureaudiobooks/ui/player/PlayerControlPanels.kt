@@ -34,6 +34,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -133,62 +134,6 @@ fun PlayerActionTile(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-@Composable
-fun PlayerSecondaryTile(
-    icon: ImageVector,
-    label: String,
-    active: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val containerColor = if (active) {
-        MaterialTheme.colorScheme.primaryContainer
-    } else {
-        MaterialTheme.colorScheme.surfaceContainerLow
-    }
-    val contentColor = if (active) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    val border = if (active) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
-
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = containerColor,
-        border = border,
-        modifier = modifier
-            .height(44.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .semantics { role = Role.Button }
-            .clickable(onClick = onClick)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = contentColor
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                color = contentColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -690,9 +635,15 @@ internal fun SleepControlPanel(
     onSetSleepEndOfTrack: (Boolean) -> Unit
 ) {
     var isDragging by remember { mutableStateOf(false) }
-    var sleepStep by remember(presetMinutes, remainingMs) {
+    var sleepStep by remember {
         val currentMins = if (remainingMs <= 0L) 0 else presetMinutes.coerceIn(0, 120)
         mutableIntStateOf(((currentMins + 2) / 5).coerceIn(0, 24))
+    }
+    LaunchedEffect(presetMinutes, remainingMs, isDragging) {
+        if (!isDragging) {
+            val currentMins = if (remainingMs <= 0L) 0 else presetMinutes.coerceIn(0, 120)
+            sleepStep = ((currentMins + 2) / 5).coerceIn(0, 24)
+        }
     }
 
     val selectedMinutes = sleepStep * 5

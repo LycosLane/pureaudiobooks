@@ -3,6 +3,7 @@ package com.lycoslane.pureaudiobooks.ui.common
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Log
 import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -59,6 +60,7 @@ object BookCoverCache {
 }
 
 private object NativeBookImageCache {
+    private const val TAG = "BookCoverImage"
     private const val MAX_IMAGE_BYTES = 8L * 1024 * 1024
     private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val inFlight = ConcurrentHashMap<String, Deferred<ImageBitmap?>>()
@@ -113,6 +115,8 @@ private object NativeBookImageCache {
                 appContext.contentResolver.openInputStream(uri)?.use {
                     BitmapFactory.decodeStream(it, null, opts)
                 }
+            }.onFailure {
+                Log.w(TAG, "Failed to decode cover from content URI $url", it)
             }.getOrNull() ?: return null
             val imageBitmap = bitmap.asImageBitmap()
             memoryCache.put(key, imageBitmap)
@@ -152,17 +156,28 @@ private object NativeBookImageCache {
 
     private fun downloadPreview(url: String, target: File, maxDecodeSizePx: Int): android.graphics.Bitmap? {
         var conn: HttpURLConnection? = null
+        var tempFile: File? = null
         return try {
             conn = NetworkSecurity.openValidatedConnection(url, connectTimeoutMs = 8_000, readTimeoutMs = 10_000)
-            if (conn.responseCode !in 200..299) return null
-            BoundedInputStream(conn.inputStream, MAX_IMAGE_BYTES).use { input ->
-                target.outputStream().use { out -> input.copyTo(out) }
+            if (conn.responseCode !in 200..299) {
+                Log.w(TAG, "Cover download HTTP ${conn.responseCode} for $url")
+                return null
             }
+            tempFile = File.createTempFile("art_", ".tmp", target.parentFile)
+            BoundedInputStream(conn.inputStream, MAX_IMAGE_BYTES).use { input ->
+                tempFile.outputStream().use { out -> input.copyTo(out) }
+            }
+            if (!tempFile.renameTo(target)) {
+                tempFile.copyTo(target, overwrite = true)
+                tempFile.delete()
+            }
+            tempFile = null
             decodeSampledFile(target, maxDecodeSizePx)
         } catch (e: CancellationException) {
             throw e
-        } catch (_: Exception) {
-            target.delete()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to download cover preview $url", e)
+            tempFile?.delete()
             null
         } finally {
             conn?.disconnect()

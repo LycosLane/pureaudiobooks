@@ -81,6 +81,7 @@
     <string name="search_query_hint">Titel oder Autor suchen</string>
     <string name="save_and_write_sidecar">Speichern (info.txt &amp; cover.jpg)</string>
     <string name="metadata_saved">Metadaten gespeichert</string>
+    <string name="metadata_saved_cover_failed">Metadaten gespeichert, Cover-Download fehlgeschlagen</string>
 
     <string name="bookmarks_header">Lesezeichen (%1$d)</string>
     <string name="add_bookmark">Lesezeichen</string>
@@ -174,6 +175,7 @@
     <string name="backup_export">Backup exportieren</string>
     <string name="backup_import">Backup importieren</string>
     <string name="backup_exported">Backup exportiert</string>
+    <string name="backup_export_failed">Backup konnte nicht exportiert werden</string>
     <string name="backup_imported">%1$d Hörbücher wiederhergestellt</string>
     <string name="backup_import_failed">Backup konnte nicht importiert werden</string>
     <string name="settings_version_format">PureAudiobooks v%1$s (Build %2$d)</string>
@@ -225,6 +227,7 @@
     <string name="search_online_alternatives">Online nach Alternativen suchen</string>
     <string name="choose_cover_from_gallery">Cover aus Galerie wählen</string>
     <string name="cover_updated">Cover aktualisiert</string>
+    <string name="cover_update_failed">Cover konnte nicht aktualisiert werden (max. 8 MB)</string>
     <string name="tap_active_tab_to_collapse">Aktiven Tab erneut tippen zum Einklappen</string>
     <string name="no_description_available">Keine Beschreibung vorhanden.</string>
     <string name="tap_to_read_fullscreen_hint">Text tippen für Vollbild-Lesemodus · Zwei Finger zum Zoomen</string>
