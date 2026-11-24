@@ -1,0 +1,3 @@
+- Hardened SAF library sync against storage errors, preserved user covers, and migrated bookmarks on album splits.
+- Fixed bookmark jumps, inactive-book seeks, per-book smart-rewind commands, sleep-at-chapter-end, and slider snap-back.
+- Added 24-bit/float audio passthrough fallback, background backup I/O with error feedback, contextual logging, and accessibility fixes.

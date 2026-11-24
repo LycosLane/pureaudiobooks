@@ -1,0 +1,3 @@
+- SAF-Bibliothekssync gegen Speicherfehler abgesichert, eigene Cover geschuetzt und Lesezeichen beim Album-Split uebernommen.
+- Lesezeichen-Spruenge, Seek auf inaktiven Buechern, Smart-Rewind pro Buch, Kapitelende-Timer und Slider-Ruecksprung behoben.
+- Passthrough-Fallback fuer 24-Bit/Float-Audio, Backup-I/O im Hintergrund mit Fehler-Feedback, Error-Logging und TalkBack-Fix ergaenzt.
