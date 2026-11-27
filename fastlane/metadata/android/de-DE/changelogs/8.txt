@@ -1,0 +1,3 @@
+- Stille Aussetzer bei Hintergrund- und Auto-Bluetooth-Wiedergabe nach Kapitelwechseln behoben (16-Bit-PCM-Software-Audio, Audio-Offload deaktiviert, Transition-WakeLock und sauberes DynamicsProcessing-Lifecycle).
+- Einmaligen Retry bei transienten Wiedergabefehlern und sauberes Buffer-Flush im Silence-Prozessor beim Trackwechsel ergaenzt.
+- Akku-Optimierungsstatus mit Direktlink zu den Akku-Einstellungen sowie einen wegklickbaren Start-Hinweis ergaenzt.

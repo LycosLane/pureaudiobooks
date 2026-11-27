@@ -28,7 +28,8 @@ data class AppSettings(
     val lightAccent: String = AppPreferences.DEFAULT_ACCENT,
     val darkAccent: String = AppPreferences.DEFAULT_ACCENT,
     val showRefreshButton: Boolean = true,
-    val showSearchBar: Boolean = true
+    val showSearchBar: Boolean = true,
+    val batteryOptimizationHintDismissed: Boolean = false
 )
 
 class AppPreferences(context: Context) {
@@ -68,7 +69,8 @@ class AppPreferences(context: Context) {
         lightAccent = normalizeAccent(prefs.getString(KEY_LIGHT_ACCENT, DEFAULT_ACCENT)),
         darkAccent = normalizeAccent(prefs.getString(KEY_DARK_ACCENT, DEFAULT_ACCENT)),
         showRefreshButton = prefs.getBoolean(KEY_SHOW_REFRESH_BUTTON, true),
-        showSearchBar = prefs.getBoolean(KEY_SHOW_SEARCH_BAR, true)
+        showSearchBar = prefs.getBoolean(KEY_SHOW_SEARCH_BAR, true),
+        batteryOptimizationHintDismissed = prefs.getBoolean(KEY_BATTERY_OPT_HINT_DISMISSED, false)
     )
 
     fun setLocalFolderUri(uri: String) {
@@ -184,6 +186,11 @@ class AppPreferences(context: Context) {
         _settings.update { it.copy(showSearchBar = show) }
     }
 
+    fun setBatteryOptimizationHintDismissed(dismissed: Boolean) {
+        prefs.edit().putBoolean(KEY_BATTERY_OPT_HINT_DISMISSED, dismissed).apply()
+        _settings.update { it.copy(batteryOptimizationHintDismissed = dismissed) }
+    }
+
     companion object {
         const val PREFS_NAME = "pureaudiobooks_prefs"
         const val KEY_APP_LANGUAGE = "app_language"
@@ -212,5 +219,6 @@ class AppPreferences(context: Context) {
         private const val KEY_DARK_ACCENT = "dark_accent"
         private const val KEY_SHOW_REFRESH_BUTTON = "show_refresh_button"
         private const val KEY_SHOW_SEARCH_BAR = "show_search_bar"
+        private const val KEY_BATTERY_OPT_HINT_DISMISSED = "battery_opt_hint_dismissed"
     }
 }

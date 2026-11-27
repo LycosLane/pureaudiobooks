@@ -194,6 +194,9 @@ fun PureAudiobooksApp(app: PureAudiobooksApplication) {
                     onOpenSettings = {
                         navController.navigate("settings") { launchSingleTop = true }
                     },
+                    onDismissBatteryHint = {
+                        libraryViewModel.preferences.setBatteryOptimizationHintDismissed(true)
+                    },
                     onOpenBook = { bookId ->
                         navController.navigate("detail/$bookId") { launchSingleTop = true }
                     },

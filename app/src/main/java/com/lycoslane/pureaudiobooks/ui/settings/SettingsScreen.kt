@@ -26,6 +26,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BatteryAlert
+import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FolderOpen
@@ -46,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,11 +71,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.pm.PackageInfoCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lycoslane.pureaudiobooks.R
 import com.lycoslane.pureaudiobooks.core.audio.AudioMonoMode
 import com.lycoslane.pureaudiobooks.core.local.LocalAudiobookScanner
 import com.lycoslane.pureaudiobooks.core.preferences.AppPreferences
 import com.lycoslane.pureaudiobooks.core.preferences.AppSettings
+import com.lycoslane.pureaudiobooks.core.preferences.BatteryOptimizationHelper
 import com.lycoslane.pureaudiobooks.ui.common.MonoModeSelector
 import com.lycoslane.pureaudiobooks.ui.common.PureSegmentedControl
 import com.lycoslane.pureaudiobooks.ui.player.SpeedControlPanel
@@ -108,7 +115,20 @@ fun SettingsScreen(
     onImportBackup: () -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var showOnlineInfo by rememberSaveable { mutableStateOf(false) }
+    var isIgnoringBatteryOpt by remember {
+        mutableStateOf(BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context))
+    }
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isIgnoringBatteryOpt = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     val effectiveDark = isDarkThemeEffective(settings.themeMode)
     val activeAccentId = if (effectiveDark) settings.darkAccent else settings.lightAccent
@@ -394,6 +414,44 @@ fun SettingsScreen(
                     onSelect = onChangeBluetoothNextPrevSeeks,
                     maxLines = 2
                 )
+                SectionDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isIgnoringBatteryOpt) Icons.Default.BatteryChargingFull else Icons.Default.BatteryAlert,
+                        contentDescription = null,
+                        tint = if (isIgnoringBatteryOpt) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = stringResource(R.string.battery_opt_title),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = stringResource(
+                        if (isIgnoringBatteryOpt) R.string.battery_opt_status_unrestricted
+                        else R.string.battery_opt_status_restricted
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (!isIgnoringBatteryOpt) {
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = { BatteryOptimizationHelper.openBatteryOptimizationSettings(context) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.BatteryAlert, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.battery_opt_open_settings))
+                    }
+                }
             }
 
             // 3. Library & Online Lookup

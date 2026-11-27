@@ -1,0 +1,3 @@
+- Fixed silent background and car Bluetooth playback dropouts after track transitions by locking 16-bit PCM software audio processing, disabling audio offload, adding a track-transition wake lock, and hardening DynamicsProcessing lifecycle.
+- Added transient playback error retry and silence-processor buffer flush hygiene across track transitions.
+- Added a battery optimization status check and shortcut in Playback settings plus a dismissible startup banner when battery optimization is still enabled.

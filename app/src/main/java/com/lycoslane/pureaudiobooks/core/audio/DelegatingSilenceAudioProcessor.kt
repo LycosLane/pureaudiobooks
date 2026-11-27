@@ -111,6 +111,9 @@ class DelegatingSilenceAudioProcessor : AudioProcessor {
     override fun flush() {
         inputEnded = false
         passthroughBuffer = AudioProcessor.EMPTY_BUFFER
+        if (reusableBuffer !== AudioProcessor.EMPTY_BUFFER) {
+            reusableBuffer.clear()
+        }
         currentTier = if (silenceSupported) activeTier else -1
         for (tier in tiers) tier.flush()
     }

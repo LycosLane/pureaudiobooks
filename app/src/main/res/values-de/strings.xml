@@ -247,6 +247,14 @@
     <string name="metadata_apply_diff_count">Auswahl übernehmen (%1$d neu)</string>
     <string name="action_done">Fertig</string>
 
+    <string name="battery_opt_title">Hintergrund-Wiedergabe (Akku)</string>
+    <string name="battery_opt_status_unrestricted">Uneingeschränkt — Hintergrund- &amp; Bluetooth-Wiedergabe ist geschützt.</string>
+    <string name="battery_opt_status_restricted">Akku-Optimierung ist aktiv. Stelle in App-Info → Akku auf „Uneingeschränkt“, um Aussetzer bei ausgeschaltetem Display zu vermeiden.</string>
+    <string name="battery_opt_open_settings">Akku-Einstellungen</string>
+    <string name="battery_opt_banner_title">Akku-Optimierung deaktivieren</string>
+    <string name="battery_opt_banner_body">Damit die Wiedergabe im Hintergrund oder im Auto per Bluetooth nicht aussetzt, stelle bitte unter App-Info → Akku auf „Uneingeschränkt“.</string>
+    <string name="action_dismiss">Später</string>
+
     <string name="snackbar_book_hidden">Hörbuch ausgeblendet</string>
     <string name="action_undo">Rückgängig</string>
     <string name="state_on">Ein</string>

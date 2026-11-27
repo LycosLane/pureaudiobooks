@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
@@ -39,9 +40,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,14 +54,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lycoslane.pureaudiobooks.R
 import com.lycoslane.pureaudiobooks.core.database.AudiobookEntity
 import com.lycoslane.pureaudiobooks.core.database.AudiobookWithTracks
 import com.lycoslane.pureaudiobooks.core.preferences.AppSettings
+import com.lycoslane.pureaudiobooks.core.preferences.BatteryOptimizationHelper
 import com.lycoslane.pureaudiobooks.ui.common.Formatters
 import com.lycoslane.pureaudiobooks.ui.common.PureSegmentedControl
 import com.lycoslane.pureaudiobooks.ui.detail.AudiobookSettingsSheet
@@ -84,6 +93,7 @@ fun HomeScreen(
     onScan: () -> Unit,
     onPickFolder: () -> Unit,
     onOpenSettings: () -> Unit,
+    onDismissBatteryHint: () -> Unit,
     onOpenBook: (Long) -> Unit,
     onOpenBookMetadata: (Long) -> Unit,
     onPlayBook: (AudiobookWithTracks) -> Unit,
@@ -100,6 +110,21 @@ fun HomeScreen(
     onRestoreFromTrash: (Long) -> Unit,
     onPermanentlyDelete: (Long) -> Unit
 ) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var isIgnoringBatteryOpt by remember {
+        mutableStateOf(BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context))
+    }
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isIgnoringBatteryOpt = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     var selectedFilter by rememberSaveable { mutableStateOf(LibraryFilter.ACTIVE) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var bookMenuTarget by remember { mutableStateOf<AudiobookWithTracks?>(null) }
@@ -189,6 +214,57 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            if (!isIgnoringBatteryOpt && !globalSettings.batteryOptimizationHintDismissed) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.BatteryAlert,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = stringResource(R.string.battery_opt_banner_title),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                        Text(
+                            text = stringResource(R.string.battery_opt_banner_body),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(onClick = onDismissBatteryHint) {
+                                Text(stringResource(R.string.action_dismiss))
+                            }
+                            TextButton(
+                                onClick = { BatteryOptimizationHelper.openBatteryOptimizationSettings(context) }
+                            ) {
+                                Text(stringResource(R.string.battery_opt_open_settings))
+                            }
+                        }
+                    }
+                }
+            }
+
             if (!hasFolderConfigured && activeBooks.isEmpty()) {
                 Box(
                     modifier = Modifier

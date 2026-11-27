@@ -247,6 +247,14 @@
     <string name="metadata_apply_diff_count">Apply selection (%1$d new)</string>
     <string name="action_done">Done</string>
 
+    <string name="battery_opt_title">Background playback (Battery)</string>
+    <string name="battery_opt_status_unrestricted">Unrestricted — background &amp; Bluetooth playback is protected.</string>
+    <string name="battery_opt_status_restricted">Battery optimization is active. Set Battery to Unrestricted in App info to prevent playback dropouts when the screen is off.</string>
+    <string name="battery_opt_open_settings">Battery settings</string>
+    <string name="battery_opt_banner_title">Disable battery optimization</string>
+    <string name="battery_opt_banner_body">To prevent silent dropouts in the background or over car Bluetooth, set App info → Battery → Unrestricted.</string>
+    <string name="action_dismiss">Later</string>
+
     <string name="snackbar_book_hidden">Audiobook hidden</string>
     <string name="action_undo">Undo</string>
     <string name="state_on">On</string>

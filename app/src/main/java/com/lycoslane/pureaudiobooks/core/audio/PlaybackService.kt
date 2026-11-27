@@ -1,10 +1,12 @@
 package com.lycoslane.pureaudiobooks.core.audio
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.media.audiofx.DynamicsProcessing
 import android.net.Uri
 import android.os.Bundle
+import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.OptIn
@@ -16,6 +18,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -63,6 +66,8 @@ class PlaybackService : MediaSessionService() {
     private var currentAudioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
     private var attachedAudioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
     private var currentEffectiveNormalization: Boolean = false
+    private var transientErrorRetryCount: Int = 0
+    private var transitionWakeLock: PowerManager.WakeLock? = null
 
     @Volatile
     private var sleepAtEndOfTrack: Boolean = false
@@ -84,13 +89,15 @@ class PlaybackService : MediaSessionService() {
 
         val renderersFactory = object : DefaultRenderersFactory(this) {
             override fun buildAudioSink(
-                context: android.content.Context,
+                context: Context,
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean
             ): AudioSink {
+                // Keep 16-bit PCM + software SonicAudioProcessor so speed/silence/mono stay consistent
+                // across track transitions and Bluetooth/background power states without AudioTrack stalls.
                 return DefaultAudioSink.Builder(context)
-                    .setEnableFloatOutput(enableFloatOutput)
-                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .setEnableFloatOutput(false)
+                    .setEnableAudioTrackPlaybackParams(false)
                     .setAudioProcessors(arrayOf(monoProcessor, silenceProcessor))
                     .build()
             }
@@ -107,6 +114,14 @@ class PlaybackService : MediaSessionService() {
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .setSeekBackIncrementMs(10_000L)
             .setSeekForwardIncrementMs(30_000L)
+            .build()
+
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setAudioOffloadPreferences(
+                TrackSelectionParameters.AudioOffloadPreferences.Builder()
+                    .setAudioOffloadMode(TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED)
+                    .build()
+            )
             .build()
 
         val app = applicationContext as PureAudiobooksApplication
@@ -188,6 +203,13 @@ class PlaybackService : MediaSessionService() {
         player.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 Log.e(TAG, "ExoPlayer error (${error.errorCodeName}): ${error.message}", error)
+                releaseDynamicsProcessing()
+                releaseTransitionWakeLock()
+                if (transientErrorRetryCount < 1 && player.currentMediaItem != null) {
+                    transientErrorRetryCount++
+                    player.prepare()
+                    player.play()
+                }
             }
 
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
@@ -198,6 +220,7 @@ class PlaybackService : MediaSessionService() {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) {
                     lastPausedElapsedMs = 0L
+                    applyAudioNormalization(currentEffectiveNormalization)
                     startPositionSaver()
                 } else {
                     if (player.playbackState != Player.STATE_ENDED &&
@@ -212,16 +235,27 @@ class PlaybackService : MediaSessionService() {
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_ENDED) {
+                if (playbackState == Player.STATE_READY) {
+                    transientErrorRetryCount = 0
+                    releaseTransitionWakeLock()
+                } else if (playbackState == Player.STATE_IDLE) {
+                    releaseTransitionWakeLock()
+                } else if (playbackState == Player.STATE_ENDED) {
                     positionSaveJob?.cancel()
                     lastPausedElapsedMs = 0L
+                    releaseDynamicsProcessing()
                     val trackId = player.currentMediaItem?.mediaId?.toLongOrNull() ?: return
                     val stopForSleep = sleepAtEndOfTrack
                     sleepAtEndOfTrack = false
+                    acquireTransitionWakeLock()
 
                     serviceScope.launch(Dispatchers.IO) {
                         val dao = PureAudiobooksDatabase.getInstance(applicationContext).dao()
-                        val track = dao.getTrack(trackId) ?: return@launch
+                        val track = dao.getTrack(trackId)
+                        if (track == null) {
+                            releaseTransitionWakeLock()
+                            return@launch
+                        }
                         val now = System.currentTimeMillis()
                         dao.setTrackFinished(trackId, true)
                         dao.updateTrackPosition(trackId, 0L)
@@ -240,7 +274,7 @@ class PlaybackService : MediaSessionService() {
                             withContext(Dispatchers.Main) {
                                 prepareTrackPaused(nextTrack.id)
                             }
-                        } else if (nextTrack == null) {
+                        } else {
                             dao.setAudiobookFinished(track.audiobookId, true, now)
                             lastTrackPrefs().edit().remove(KEY_LAST_TRACK_ID).apply()
                             val autoTrashDays = app.preferences.settings.value.autoMoveFinishedToTrashDays
@@ -251,6 +285,7 @@ class PlaybackService : MediaSessionService() {
                                     player.clearMediaItems()
                                 }
                             }
+                            releaseTransitionWakeLock()
                         }
                     }
                 }
@@ -343,11 +378,11 @@ class PlaybackService : MediaSessionService() {
                                     bookOverride = withBook.audiobook.smartRewindOverride
                                 )
                                 withContext(Dispatchers.Main) {
+                                    releaseDynamicsProcessing()
                                     player.playbackParameters = PlaybackParameters(effectiveSpeed)
                                     updateSilenceProcessors(effectiveSkipSilence, effectiveIntensity)
                                     monoProcessor.setMode(effectiveMono)
                                     currentEffectiveNormalization = effectiveNorm
-                                    applyAudioNormalization(effectiveNorm)
                                 }
                                 future.set(
                                     MediaSession.MediaItemsWithStartPosition(
@@ -561,8 +596,14 @@ class PlaybackService : MediaSessionService() {
         skipTrackJob?.cancel()
         skipTrackJob = serviceScope.launch {
             val dao = PureAudiobooksDatabase.getInstance(applicationContext).dao()
-            val pair = withContext(Dispatchers.IO) { dao.getTrackWithAudiobook(trackId) } ?: return@launch
-            val item = buildMediaItem(pair.track, pair.audiobook) ?: return@launch
+            val pair = withContext(Dispatchers.IO) { dao.getTrackWithAudiobook(trackId) } ?: run {
+                releaseTransitionWakeLock()
+                return@launch
+            }
+            val item = buildMediaItem(pair.track, pair.audiobook) ?: run {
+                releaseTransitionWakeLock()
+                return@launch
+            }
             val globalSettings = (applicationContext as PureAudiobooksApplication).preferences.settings.value
             val effectiveSpeed = SpeedOverride.resolve(
                 globalSpeed = globalSettings.defaultPlaybackSpeed,
@@ -594,12 +635,12 @@ class PlaybackService : MediaSessionService() {
                 bookOverride = pair.audiobook.audioNormalizationOverride
             )
             lastPausedElapsedMs = 0L
+            releaseDynamicsProcessing()
             player.setMediaItem(item, startPos)
             player.playbackParameters = PlaybackParameters(effectiveSpeed)
             updateSilenceProcessors(effectiveSkipSilence, effectiveIntensity)
             monoProcessor.setMode(effectiveMono)
             currentEffectiveNormalization = effectiveNorm
-            applyAudioNormalization(effectiveNorm)
             player.prepare()
             if (autoPlay) {
                 player.play()
@@ -609,6 +650,26 @@ class PlaybackService : MediaSessionService() {
             lastTrackPrefs().edit().putLong(KEY_LAST_TRACK_ID, pair.track.id).apply()
             withContext(Dispatchers.IO) {
                 dao.updateLastTrack(pair.audiobook.id, pair.track.id, System.currentTimeMillis())
+            }
+        }
+    }
+
+    private fun acquireTransitionWakeLock() {
+        runCatching {
+            val wl = transitionWakeLock ?: (getSystemService(Context.POWER_SERVICE) as? PowerManager)
+                ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PureAudiobooks:TrackTransition")
+                ?.apply { setReferenceCounted(false) }
+                ?.also { transitionWakeLock = it }
+            if (wl != null && !wl.isHeld) {
+                wl.acquire(15_000L)
+            }
+        }
+    }
+
+    private fun releaseTransitionWakeLock() {
+        runCatching {
+            transitionWakeLock?.let { wl ->
+                if (wl.isHeld) wl.release()
             }
         }
     }
@@ -694,6 +755,7 @@ class PlaybackService : MediaSessionService() {
             mediaSession = null
         }
         releaseDynamicsProcessing()
+        releaseTransitionWakeLock()
 
         if (trackId != null) {
             runCatching {
